@@ -13,7 +13,17 @@ Es a la vez un producto pequeño pero real y un banco de pruebas de AES con el h
 
 ## Estado
 
-En preparación. El backlog, la arquitectura y el perfil del proyecto estarán en `docs/` y `specs/`.
+Inicio del proyecto: EN-001 y US-001 propuestas. Para trabajar, ver [`docs/runbook.md`](docs/runbook.md).
+
+| Documento | Contenido |
+|---|---|
+| [`docs/project-brief.md`](docs/project-brief.md) | Problema, alcance y fuera de alcance |
+| [`docs/architecture-overview.md`](docs/architecture-overview.md) | Componentes, datos, seguridad |
+| [`docs/adr/`](docs/adr/) | Decisiones de arquitectura |
+| [`docs/project-profile.md`](docs/project-profile.md) | Perfil AES y **binding de roles** (harness y modelo por rol) |
+| [`docs/backlog.md`](docs/backlog.md) | Epics e historias |
+| [`specs/`](specs/) | Historias, tareas y superficies de cambio |
+| [`docs/harness-findings.md`](docs/harness-findings.md) | Hallazgos del experimento con Claude Code |
 
 ## Convención de ramas
 
