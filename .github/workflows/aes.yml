@@ -1,5 +1,4 @@
 # AES — workflow de CI del proyecto (capa L3).
-# Para activarlo: mover a .github/workflows/aes.yml (requiere un token con permiso de workflows).
 #
 # Un único job llamado "aes", para exigir un solo check en la protección de rama.
 # Los pasos de .NET y web se activan solos cuando exista el código correspondiente.
