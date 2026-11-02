@@ -1,0 +1,162 @@
+# AES — workflow de CI del proyecto (capa L3), versión 2.
+# Para activarlo: copiar a .github/workflows/aes.yml (la app de los agentes no puede: requiere tu cuenta).
+#
+# Un único job "aes" (el check obligatorio del ruleset). Según la rama:
+#   task/<ID>/<TASK>  guardián AES (desde main) + build/test + aceptación de <ID> y de las historias activas
+#   qa/<ID>           build/test + RED automático: las pruebas de <ID> DEBEN fallar contra el código actual
+#   spec/*, otras     build/test + regresión de historias activas
+#   push a main       build/test + regresión de historias activas
+name: aes
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (historial completo para comparar con la base)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Contexto AES (tipo de rama, historia, historias activas)
+        id: ctx
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          kind=main; story=""
+          if [[ "$EVENT" == "pull_request" ]]; then
+            case "$HEAD_BRANCH" in
+              task/*/*) kind=task; story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              qa/*)     kind=qa;   story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              *)        kind=other ;;
+            esac
+            base="origin/$BASE_BRANCH"
+          else
+            base="HEAD"
+          fi
+          # Historias activas: siempre la versión de la base (main), no la de la rama.
+          active=$(git show "$base:specs/active-stories.txt" 2>/dev/null | sed 's/#.*//' | tr -d ' \r' | grep -v '^$' | paste -sd'|' || true)
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "story=$story" >> "$GITHUB_OUTPUT"
+          echo "active=$active" >> "$GITHUB_OUTPUT"
+          echo "Rama: ${HEAD_BRANCH:-main} | tipo: $kind | historia: ${story:-—} | activas: ${active:-ninguna}"
+
+      # ---------- Guardián (solo ramas de programador) ----------
+      - name: Guardián AES (copia de main)
+        if: ${{ steps.ctx.outputs.kind == 'task' }}
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          AES_ALLOW_MARKERS: ${{ contains(github.event.pull_request.labels.*.name, 'aes:markers-approved') && '1' || '0' }}
+          AES_ALLOW_DEPS: ${{ contains(github.event.pull_request.labels.*.name, 'aes:deps-approved') && '1' || '0' }}
+        run: |
+          git show "$BASE_REF:ci/aes-guard.sh" > /tmp/aes-guard.sh
+          export TASK_SCOPE_FILE="specs/$(cut -d/ -f2 <<< "$HEAD_BRANCH")/$(cut -d/ -f3 <<< "$HEAD_BRANCH").scope"
+          bash /tmp/aes-guard.sh
+
+      - name: Restaurar suite de aceptación desde main
+        if: ${{ steps.ctx.outputs.kind == 'task' }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          if git cat-file -e "$base:tests/acceptance" 2>/dev/null; then
+            rm -rf tests/acceptance
+            git checkout "$base" -- tests/acceptance
+            echo "Suite de aceptación restaurada desde main."
+          else
+            echo "Aún no hay suite de aceptación en main."
+          fi
+
+      # ---------- Backend .NET ----------
+      - name: Instalar .NET 10
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln') != '' }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compilar y probar (.NET)
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln') != '' }}
+        run: |
+          dotnet restore
+          dotnet build --no-restore --configuration Release -warnaserror
+          dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+
+      # ---------- Node (web y aceptación) ----------
+      - name: Instalar Node
+        if: ${{ hashFiles('web/package.json', 'tests/acceptance/package.json') != '' }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Lint, pruebas y build (web)
+        if: ${{ hashFiles('web/package.json') != '' }}
+        working-directory: web
+        run: |
+          npm ci
+          npm run lint
+          npm test --if-present
+          npm run build
+
+      # ---------- Aceptación (Playwright) ----------
+      - name: Preparar Playwright
+        id: pw
+        if: ${{ hashFiles('tests/acceptance/package.json') != '' }}
+        working-directory: tests/acceptance
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: RED automático (rama qa/<ID>)
+        if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind == 'qa' }}
+        working-directory: tests/acceptance
+        env:
+          STORY: ${{ steps.ctx.outputs.story }}
+        run: |
+          echo "Las pruebas de @$STORY deben FALLAR contra el código actual (RED confirmado)."
+          if npx playwright test --grep "@$STORY" --reporter=list; then
+            echo "::error::Las pruebas de @$STORY pasan contra el código actual: no prueban la funcionalidad nueva (AES 05 §2.2)."
+            exit 1
+          fi
+          echo "RED confirmado. Revisa en el reporte que cada prueba falle por la razón esperada."
+
+      - name: Aceptación (historia en curso + regresión)
+        if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind != 'qa' }}
+        working-directory: tests/acceptance
+        env:
+          STORY: ${{ steps.ctx.outputs.story }}
+          ACTIVE: ${{ steps.ctx.outputs.active }}
+        run: |
+          tags=$(printf '%s|%s' "$STORY" "$ACTIVE" | tr '|' '\n' | { grep -v '^$' || true; } | sort -u | sed 's/^/@/' | paste -sd'|')
+          if [[ -z "$tags" ]]; then
+            echo "No hay historias activas ni en curso: no se ejecuta aceptación."
+            exit 0
+          fi
+          echo "Ejecutando aceptación para: $tags"
+          npx playwright test --grep "$tags" --reporter=list
+
+      - name: Publicar reporte de Playwright
+        if: ${{ always() && steps.pw.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: tests/acceptance/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Estado inicial
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln', 'web/package.json', 'tests/acceptance/package.json') == '' }}
+        run: echo "Todavía no hay código de aplicación; solo se validó la estructura AES."
