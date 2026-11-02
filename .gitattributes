@@ -1,0 +1,13 @@
+# Normaliza finales de línea en el repositorio.
+* text=auto
+
+# Los scripts de bash DEBEN usar LF, también en Windows.
+# Con CRLF fallan con errores como "/usr/bin/env: 'bash\r': No such file or directory".
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Archivos de Windows con CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf

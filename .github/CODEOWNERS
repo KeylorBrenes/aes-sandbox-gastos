@@ -1,0 +1,9 @@
+# AES — rutas protegidas: solo el responsable humano aprueba cambios.
+/tests/acceptance/  @KeylorBrenes
+/specs/             @KeylorBrenes
+/ci/                @KeylorBrenes
+/docs/ci/           @KeylorBrenes
+/.github/           @KeylorBrenes
+/.claude/           @KeylorBrenes
+/AGENTS.md          @KeylorBrenes
+/CLAUDE.md          @KeylorBrenes

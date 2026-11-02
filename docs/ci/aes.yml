@@ -1,0 +1,95 @@
+# AES — workflow de CI del proyecto (capa L3).
+# Para activarlo: mover a .github/workflows/aes.yml (requiere un token con permiso de workflows).
+#
+# Un único job llamado "aes", para exigir un solo check en la protección de rama.
+# Los pasos de .NET y web se activan solos cuando exista el código correspondiente.
+name: aes
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Si subes otro commit al mismo PR, cancela la ejecución anterior.
+concurrency:
+  group: aes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (historial completo para comparar con la base)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # El guardián se aplica a ramas de programador (task/US-NNN/TASK-NNN).
+      # Se ejecuta la copia de main, nunca la de la rama del PR.
+      - name: Guardián AES (desde main)
+        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'task/') }}
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          AES_ALLOW_MARKERS: ${{ contains(github.event.pull_request.labels.*.name, 'aes:markers-approved') && '1' || '0' }}
+          AES_ALLOW_DEPS: ${{ contains(github.event.pull_request.labels.*.name, 'aes:deps-approved') && '1' || '0' }}
+        run: |
+          git show "$BASE_REF:ci/aes-guard.sh" > /tmp/aes-guard.sh
+          story=$(cut -d/ -f2 <<< "$HEAD_BRANCH")
+          task=$(cut -d/ -f3 <<< "$HEAD_BRANCH")
+          if [[ -n "$story" && -n "$task" ]]; then
+            export TASK_SCOPE_FILE="specs/$story/$task.scope"
+          fi
+          bash /tmp/aes-guard.sh
+
+      # Las pruebas de aceptación siempre se ejecutan en su versión aprobada (main).
+      - name: Restaurar suite de aceptación desde main
+        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'task/') }}
+        run: |
+          if git cat-file -e "origin/${{ github.base_ref }}:tests/acceptance" 2>/dev/null; then
+            rm -rf tests/acceptance
+            git checkout "origin/${{ github.base_ref }}" -- tests/acceptance
+            echo "Suite de aceptación restaurada desde main."
+          else
+            echo "Aún no hay suite de aceptación en main."
+          fi
+
+      # ---------- Backend .NET ----------
+      - name: Instalar .NET 10
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln') != '' }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compilar y probar (.NET)
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln') != '' }}
+        run: |
+          dotnet restore
+          dotnet build --no-restore --configuration Release -warnaserror
+          dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+
+      # ---------- Frontend React ----------
+      - name: Instalar Node
+        if: ${{ hashFiles('web/package.json') != '' }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Lint, pruebas y build (web)
+        if: ${{ hashFiles('web/package.json') != '' }}
+        working-directory: web
+        run: |
+          npm ci
+          npm run lint
+          npm test --if-present
+          npm run build
+
+      - name: Estado inicial
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln', 'web/package.json') == '' }}
+        run: echo "Todavía no hay código de aplicación; solo se validó la estructura AES."

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# AES 1.1.0 — Guardián de CI (capa L3, ver standard/05 §10 y 06 §9)
+#
+# Debe ejecutarse con la copia de este script obtenida de la rama protegida,
+# nunca con la de la rama del agente. Ver .github/workflows/aes.yml.
+#
+# Variables:
+#   BASE_REF            ref confiable (por defecto origin/main)
+#   TASK_SCOPE_FILE     ruta, dentro de BASE_REF, del .scope de la tarea
+#                       (p. ej. specs/US-005/TASK-014.scope). Un glob por línea.
+#   AES_ALLOW_MARKERS   "1" solo si un responsable distinto del programador
+#                       aprobó los marcadores (p. ej. etiqueta del PR puesta por CODEOWNER)
+#   AES_ALLOW_DEPS      "1" solo si se aprobaron cambios de dependencias
+#
+# Códigos de salida: 0 = OK, 1 = violación.
+set -euo pipefail
+
+BASE="${BASE_REF:-origin/main}"
+SCOPE_PATH="${TASK_SCOPE_FILE:-}"
+ALLOW_MARKERS="${AES_ALLOW_MARKERS:-0}"
+ALLOW_DEPS="${AES_ALLOW_DEPS:-0}"
+
+# Rutas que el programador nunca puede tocar. Ajustar en el perfil del proyecto.
+PROTECTED_RE='^(tests/acceptance/|specs/|ci/|\.github/|\.claude/|docs/ci/|AGENTS\.md$|CLAUDE\.md$)'
+# Manifiestos y lockfiles de dependencias. Ajustar al stack.
+DEPS_RE='(^|/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|requirements[^/]*\.txt|poetry\.lock|pyproject\.toml|uv\.lock|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|[^/]*\.csproj|packages\.lock\.json|Directory\.Packages\.props|composer\.(json|lock)|Gemfile(\.lock)?)$'
+# Marcadores de omisión, silenciado o errores tragados.
+MARKERS_RE='\.skip\(|\bxit\(|\bxdescribe\(|@Disabled|@Ignore|#\[ignore\]|pytest\.mark\.skip|Skip *= *"|eslint-disable|@ts-ignore|@ts-expect-error|#[[:space:]]*type:[[:space:]]*ignore|#pragma warning disable|noqa|catch *(\([^)]*\))? *\{ *\}|except[^:]*: *pass'
+
+fail=0
+report() { printf '%s\n' "$*"; }
+
+changed=$(git diff --name-only "$BASE"...HEAD)
+if [[ -z "$changed" ]]; then
+  report "AES guard: sin cambios respecto a $BASE."
+  exit 0
+fi
+
+# 1. Rutas protegidas
+protected_hits=$(grep -E "$PROTECTED_RE" <<< "$changed" || true)
+if [[ -n "$protected_hits" ]]; then
+  report "FAIL [protegidas] El diff modifica rutas protegidas:"
+  report "$protected_hits"
+  fail=1
+fi
+
+# 2. Superficie de cambio (leída desde la rama protegida, no desde la del agente)
+if [[ -n "$SCOPE_PATH" ]]; then
+  if ! scope=$(git show "$BASE:$SCOPE_PATH" 2>/dev/null); then
+    report "FAIL [superficie] No existe $SCOPE_PATH en $BASE. Publica la superficie antes de delegar."
+    fail=1
+  else
+    while IFS= read -r file; do
+      [[ -z "$file" ]] && continue
+      ok=0
+      while IFS= read -r glob; do
+        glob="${glob%%#*}"; glob="${glob//[[:space:]]/}"
+        [[ -z "$glob" ]] && continue
+        # shellcheck disable=SC2053  # el glob debe expandirse como patrón
+        if [[ "$file" == $glob ]]; then ok=1; break; fi
+      done <<< "$scope"
+      if [[ $ok -eq 0 ]]; then
+        report "FAIL [superficie] Fuera de la superficie de la tarea: $file"
+        fail=1
+      fi
+    done <<< "$changed"
+  fi
+else
+  report "WARN [superficie] TASK_SCOPE_FILE no definido; no se comprobó la superficie."
+fi
+
+# 3. Dependencias
+deps_hits=$(grep -E "$DEPS_RE" <<< "$changed" || true)
+if [[ -n "$deps_hits" && "$ALLOW_DEPS" != "1" ]]; then
+  report "FAIL [dependencias] Cambios en manifiestos/lockfiles sin aprobación:"
+  report "$deps_hits"
+  fail=1
+fi
+
+# 4. Archivos de prueba eliminados
+deleted_tests=$(git diff --name-status "$BASE"...HEAD | awk '$1=="D"{print $2}' | grep -iE '(^|/)(tests?|specs?|__tests__)/|[._-](test|spec)s?\.' || true)
+if [[ -n "$deleted_tests" ]]; then
+  report "FAIL [pruebas] Se eliminaron archivos de prueba:"
+  report "$deleted_tests"
+  fail=1
+fi
+
+# 5. Marcadores de trampa en líneas añadidas
+markers=$(git diff "$BASE"...HEAD -U0 | grep -E '^\+[^+]' | grep -nE "$MARKERS_RE" || true)
+if [[ -n "$markers" ]]; then
+  if [[ "$ALLOW_MARKERS" == "1" ]]; then
+    report "WARN [marcadores] Marcadores presentes pero aprobados explícitamente:"
+  else
+    report "FAIL [marcadores] Omisión, silenciado o errores tragados en líneas añadidas (requiere justificación y aprobación):"
+    fail=1
+  fi
+  report "$markers"
+fi
+
+if [[ $fail -eq 0 ]]; then
+  report "AES guard: OK"
+fi
+exit $fail
