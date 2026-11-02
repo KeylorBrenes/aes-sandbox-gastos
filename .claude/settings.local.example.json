@@ -1,0 +1,13 @@
+{
+  "env": {
+    "AES_APP_ID": "REEMPLAZAR_APP_ID",
+    "AES_APP_INSTALLATION_ID": "177994202",
+    "AES_APP_PRIVATE_KEY": "C:/Users/REEMPLAZAR_USUARIO/.aes/aes-agent.pem",
+
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "credential.https://github.com.helper",
+    "GIT_CONFIG_VALUE_0": "",
+    "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
+    "GIT_CONFIG_VALUE_1": "!f() { bash \"$(git rev-parse --show-toplevel)/.claude/scripts/git-credential-aes-app.sh\" \"$@\"; }; f"
+  }
+}
