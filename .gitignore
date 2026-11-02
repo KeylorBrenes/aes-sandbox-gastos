@@ -31,3 +31,6 @@ Thumbs.db
 
 # Worktrees locales de agentes
 .worktrees/
+
+# Configuración local de Claude Code (puede contener tokens)
+.claude/settings.local.json

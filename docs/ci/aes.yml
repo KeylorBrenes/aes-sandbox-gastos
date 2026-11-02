@@ -77,7 +77,7 @@ jobs:
         if: ${{ hashFiles('web/package.json') != '' }}
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: lts/*  # misma línea LTS que instala winget (OpenJS.NodeJS.LTS)
           cache: npm
           cache-dependency-path: web/package-lock.json
 
