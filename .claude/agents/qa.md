@@ -21,7 +21,7 @@ No leas `src/`, `web/` ni `tests/Gastos.Api.Tests/` para diseñar las pruebas: p
 ## Qué produces
 1. Pruebas Playwright (TypeScript) en `tests/acceptance/`, una o más por criterio:
    - etiqueta de la historia en cada prueba: `test('AC-03 …', { tag: '@US-001' }, async (...) => {...})`;
-   - el ID del criterio al inicio del título;
+   - el ID del criterio al inicio del título. **Toda prueba se deriva de un criterio aprobado** (o de un caso límite listado en la historia). Si crees que falta un caso, no escribas la prueba: anótalo como pregunta en el plan para que el humano decida si se agrega un criterio;
    - solo a través del contrato: HTTP (`request`) o navegador con los `data-testid` acordados;
    - datos sintéticos; cada prueba crea lo que necesita y no depende del orden de ejecución;
    - aserciones sobre valores concretos, no solo códigos de estado.
