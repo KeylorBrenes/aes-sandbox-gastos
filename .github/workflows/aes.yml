@@ -1,7 +1,10 @@
-# AES — workflow de CI del proyecto (capa L3).
+# AES — workflow de CI del proyecto (capa L3), versión 2.
 #
-# Un único job llamado "aes", para exigir un solo check en la protección de rama.
-# Los pasos de .NET y web se activan solos cuando exista el código correspondiente.
+# Un único job "aes" (el check obligatorio del ruleset). Según la rama:
+#   task/<ID>/<TASK>  guardián AES (desde main) + build/test + aceptación de <ID> y de las historias activas
+#   qa/<ID>           build/test + RED automático: las pruebas de <ID> DEBEN fallar contra el código actual
+#   spec/*, otras     build/test + regresión de historias activas
+#   push a main       build/test + regresión de historias activas
 name: aes
 
 on:
@@ -13,7 +16,6 @@ on:
 permissions:
   contents: read
 
-# Si subes otro commit al mismo PR, cancela la ejecución anterior.
 concurrency:
   group: aes-${{ github.ref }}
   cancel-in-progress: true
@@ -27,10 +29,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      # El guardián se aplica a ramas de programador (task/US-NNN/TASK-NNN).
-      # Se ejecuta la copia de main, nunca la de la rama del PR.
-      - name: Guardián AES (desde main)
-        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'task/') }}
+      - name: Contexto AES (tipo de rama, historia, historias activas)
+        id: ctx
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          kind=main; story=""
+          if [[ "$EVENT" == "pull_request" ]]; then
+            case "$HEAD_BRANCH" in
+              task/*/*) kind=task; story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              qa/*)     kind=qa;   story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              *)        kind=other ;;
+            esac
+            base="origin/$BASE_BRANCH"
+          else
+            base="HEAD"
+          fi
+          # Historias activas: siempre la versión de la base (main), no la de la rama.
+          active=$(git show "$base:specs/active-stories.txt" 2>/dev/null | sed 's/#.*//' | tr -d ' \r' | grep -v '^$' | paste -sd'|' || true)
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "story=$story" >> "$GITHUB_OUTPUT"
+          echo "active=$active" >> "$GITHUB_OUTPUT"
+          echo "Rama: ${HEAD_BRANCH:-main} | tipo: $kind | historia: ${story:-—} | activas: ${active:-ninguna}"
+
+      # ---------- Guardián (solo ramas de programador) ----------
+      - name: Guardián AES (copia de main)
+        if: ${{ steps.ctx.outputs.kind == 'task' }}
         env:
           BASE_REF: origin/${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -38,20 +64,16 @@ jobs:
           AES_ALLOW_DEPS: ${{ contains(github.event.pull_request.labels.*.name, 'aes:deps-approved') && '1' || '0' }}
         run: |
           git show "$BASE_REF:ci/aes-guard.sh" > /tmp/aes-guard.sh
-          story=$(cut -d/ -f2 <<< "$HEAD_BRANCH")
-          task=$(cut -d/ -f3 <<< "$HEAD_BRANCH")
-          if [[ -n "$story" && -n "$task" ]]; then
-            export TASK_SCOPE_FILE="specs/$story/$task.scope"
-          fi
+          export TASK_SCOPE_FILE="specs/$(cut -d/ -f2 <<< "$HEAD_BRANCH")/$(cut -d/ -f3 <<< "$HEAD_BRANCH").scope"
           bash /tmp/aes-guard.sh
 
-      # Las pruebas de aceptación siempre se ejecutan en su versión aprobada (main).
       - name: Restaurar suite de aceptación desde main
-        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'task/') }}
+        if: ${{ steps.ctx.outputs.kind == 'task' }}
         run: |
-          if git cat-file -e "origin/${{ github.base_ref }}:tests/acceptance" 2>/dev/null; then
+          base="origin/${{ github.base_ref }}"
+          if git cat-file -e "$base:tests/acceptance" 2>/dev/null; then
             rm -rf tests/acceptance
-            git checkout "origin/${{ github.base_ref }}" -- tests/acceptance
+            git checkout "$base" -- tests/acceptance
             echo "Suite de aceptación restaurada desde main."
           else
             echo "Aún no hay suite de aceptación en main."
@@ -71,14 +93,12 @@ jobs:
           dotnet build --no-restore --configuration Release -warnaserror
           dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
 
-      # ---------- Frontend React ----------
+      # ---------- Node (web y aceptación) ----------
       - name: Instalar Node
-        if: ${{ hashFiles('web/package.json') != '' }}
+        if: ${{ hashFiles('web/package.json', 'tests/acceptance/package.json') != '' }}
         uses: actions/setup-node@v7
         with:
-          node-version: lts/*  # misma línea LTS que instala winget (OpenJS.NodeJS.LTS)
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          node-version: lts/*
 
       - name: Lint, pruebas y build (web)
         if: ${{ hashFiles('web/package.json') != '' }}
@@ -89,6 +109,53 @@ jobs:
           npm test --if-present
           npm run build
 
+      # ---------- Aceptación (Playwright) ----------
+      - name: Preparar Playwright
+        id: pw
+        if: ${{ hashFiles('tests/acceptance/package.json') != '' }}
+        working-directory: tests/acceptance
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: RED automático (rama qa/<ID>)
+        if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind == 'qa' }}
+        working-directory: tests/acceptance
+        env:
+          STORY: ${{ steps.ctx.outputs.story }}
+        run: |
+          echo "Las pruebas de @$STORY deben FALLAR contra el código actual (RED confirmado)."
+          if npx playwright test --grep "@$STORY" --reporter=list; then
+            echo "::error::Las pruebas de @$STORY pasan contra el código actual: no prueban la funcionalidad nueva (AES 05 §2.2)."
+            exit 1
+          fi
+          echo "RED confirmado. Revisa en el reporte que cada prueba falle por la razón esperada."
+
+      - name: Aceptación (historia en curso + regresión)
+        if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind != 'qa' }}
+        working-directory: tests/acceptance
+        env:
+          STORY: ${{ steps.ctx.outputs.story }}
+          ACTIVE: ${{ steps.ctx.outputs.active }}
+        run: |
+          tags=$(printf '%s|%s' "$STORY" "$ACTIVE" | tr '|' '\n' | { grep -v '^$' || true; } | sort -u | sed 's/^/@/' | paste -sd'|')
+          if [[ -z "$tags" ]]; then
+            echo "No hay historias activas ni en curso: no se ejecuta aceptación."
+            exit 0
+          fi
+          echo "Ejecutando aceptación para: $tags"
+          npx playwright test --grep "$tags" --reporter=list
+
+      - name: Publicar reporte de Playwright
+        if: ${{ always() && steps.pw.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: tests/acceptance/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Estado inicial
-        if: ${{ hashFiles('**/*.slnx', '**/*.sln', 'web/package.json') == '' }}
+        if: ${{ hashFiles('**/*.slnx', '**/*.sln', 'web/package.json', 'tests/acceptance/package.json') == '' }}
         run: echo "Todavía no hay código de aplicación; solo se validó la estructura AES."
