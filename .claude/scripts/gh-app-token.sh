@@ -4,15 +4,29 @@
 # El token dura 1 hora. Se guarda en caché y se renueva cuando le quedan menos de 5 minutos.
 # Requiere: bash, openssl, curl, jq (todos vienen con Git for Windows salvo jq).
 #
-# Variables (definidas en .claude/settings.local.json, que NO va a git):
+# Variables:
 #   AES_APP_ID               ID numérico de la app (página General de la app → "App ID")
 #   AES_APP_INSTALLATION_ID  ID de la instalación (URL .../settings/installations/<id>)
 #   AES_APP_PRIVATE_KEY      ruta al .pem, con barras normales: C:/Users/<tú>/.aes/aes-agent.pem
+# Dentro de Claude Code llegan por el bloque "env" de .claude/settings.local.json (que NO va a git).
+# Desde cualquier otra terminal, si no están definidas, se leen de ese mismo archivo.
 #
 # Uso: token=$(bash .claude/scripts/gh-app-token.sh)
 set -euo pipefail
 
-: "${AES_APP_ID:?Falta AES_APP_ID}"
+if [[ -z "${AES_APP_ID:-}" || -z "${AES_APP_INSTALLATION_ID:-}" || -z "${AES_APP_PRIVATE_KEY:-}" ]]; then
+  settings="$(cd "$(dirname "$0")/.." && pwd)/settings.local.json"
+  if [[ -r "$settings" ]]; then
+    for var in AES_APP_ID AES_APP_INSTALLATION_ID AES_APP_PRIVATE_KEY; do
+      if [[ -z "${!var:-}" ]]; then
+        value=$(jq -r --arg v "$var" '.env[$v] // empty' "$settings" | tr -d '\r')
+        [[ -n "$value" ]] && export "$var=$value"
+      fi
+    done
+  fi
+fi
+
+: "${AES_APP_ID:?Falta AES_APP_ID (defínela o configúrala en .claude/settings.local.json)}"
 : "${AES_APP_INSTALLATION_ID:?Falta AES_APP_INSTALLATION_ID}"
 : "${AES_APP_PRIVATE_KEY:?Falta AES_APP_PRIVATE_KEY}"
 [[ -r "$AES_APP_PRIVATE_KEY" ]] || { echo "No se puede leer la llave: $AES_APP_PRIVATE_KEY" >&2; exit 1; }
