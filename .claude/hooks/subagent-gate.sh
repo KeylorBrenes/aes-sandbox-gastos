@@ -20,10 +20,13 @@ failures=()
 log=$(mktemp)
 
 # 1. Guardián AES local (mismas reglas que la CI) contra origin/main.
+#    Las dependencias no se juzgan aquí: su aprobación es humana y vive en la CI
+#    (etiqueta aes:deps-approved). Rutas protegidas, superficie, pruebas borradas y
+#    marcadores sí bloquean.
 branch=$(aes_branch "$root")
 scope=$(aes_scope_file "$branch")
 if [[ -n "$scope" ]]; then
-  if ! BASE_REF=origin/main TASK_SCOPE_FILE="$scope" bash ci/aes-guard.sh >>"$log" 2>&1; then
+  if ! AES_ALLOW_DEPS=1 BASE_REF=origin/main TASK_SCOPE_FILE="$scope" bash ci/aes-guard.sh >>"$log" 2>&1; then
     failures+=("guardián AES")
   fi
 fi

@@ -12,7 +12,7 @@ Eres el **orquestador** (AES 1.1.1, `agent-contracts/orchestrator.md`). Coordina
 - A cada subagente le das **solo** lo que dice su plantilla de delegación (abajo). Nada de tu razonamiento ni del reporte de otro rol.
 - La evidencia es la salida de comandos y de la CI, no lo que un agente dice que hizo.
 - Las etiquetas `aes:deps-approved` y `aes:markers-approved` las pone **el humano**. Tú solo le pides que las revise.
-- Todo hallazgo sobre el harness va a `docs/harness-findings.md` en el momento en que ocurre (con hora). Los fallos de agentes, a `docs/agent-failure-log.md`.
+- Hallazgos y fallos de agentes **durante** el ciclo: anótalos al momento (con hora) en `.aes/findings-pending.md` y `.aes/failures-pending.md`. Esa carpeta está en `.gitignore`: no ensucia las ramas `qa/*` ni `task/*` ni el gate del programador. **Nunca** hagas commit de hallazgos en ramas `qa/*` o `task/*`. Se consolidan en `docs/harness-findings.md` y `docs/agent-failure-log.md` en el cierre (paso 4, rama `spec/<ID>-close`).
 - Git y GitHub se hacen con la identidad de la app: `git push` usa el credential helper; para `gh` usa `bash .claude/scripts/agent-gh.sh …`.
 
 ## 0. Arranque de sesión
@@ -59,7 +59,7 @@ Para cada tarea, en orden:
    - estado de la historia y del backlog actualizados;
    - `<ID>` añadido a `specs/active-stories.txt` (desde ahora es regresión en `main`);
    - retrospectiva compuesta (AES 09 §3): patrones del registro de fallos y **un control propuesto por patrón**;
-   - resumen en `docs/harness-findings.md`: tiempos por fase, ciclos FAIL, intervenciones humanas y bloqueos de hooks.
+   - consolidar `.aes/findings-pending.md` en `docs/harness-findings.md` y `.aes/failures-pending.md` en `docs/agent-failure-log.md`; resumen con tiempos por fase, ciclos FAIL, intervenciones humanas y bloqueos de hooks. Después, vacía los archivos de `.aes/`.
    PR y GATE de aprobación.
 
 ## Si algo no encaja

@@ -32,5 +32,8 @@ Thumbs.db
 # Worktrees locales de agentes
 .worktrees/
 
+# Notas de trabajo del orquestador (hallazgos pendientes de consolidar al cerrar la historia)
+.aes/
+
 # Configuración local de Claude Code (puede contener tokens)
 .claude/settings.local.json
