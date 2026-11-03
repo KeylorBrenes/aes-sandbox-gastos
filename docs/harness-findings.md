@@ -13,7 +13,7 @@ Registro vivo del experimento: ¿puede el harness de Claude Code ejecutar los ro
 | H5 | Haiku es suficiente para tareas mecánicas | Tareas de `mechanic` sin FAIL | No ejercitada: no hubo tareas de `mechanic` |
 | H6 | Los hooks bash funcionan en Windows (Git Bash, rutas `H:\`) | Sin errores de ruta ni de CRLF | Parcial (EN-001): los hooks corrieron en Git Bash sin errores de ruta; solo avisos LF/CRLF de git sin efecto |
 | H7 | El orquestador sigue la skill sin saltarse gates | Se detiene en cada GATE y espera aprobación | Parcial (EN-001): el orquestador se detuvo en GATE 1, en dependencias y en la aceptación; el GATE de verificación se saltó por fusión humana con el check rojo (FL-003) |
-| H8 | Costo y tiempo por historia son razonables | `/cost` y tiempos por fase | EN-001: ~71 min de reloj (22:04–23:15) incluidas pausas humanas; costo no registrado (`/cost` no está al alcance del orquestador) |
+| H8 | Costo y tiempo por historia son razonables | `/cost` y tiempos por fase | EN-001: ~71 min de reloj (22:04–23:15) incluidas pausas humanas; costo $4.89 (89 % orquestador Opus), API 14m15s, total 1h31m; ver hallazgo de Costo |
 | H9 | La identidad de la GitHub App separa bien agente y humano | PR con autor `[bot]`; rechazo de cambios a workflows | **Confirmada** (2026-11-02): push a `.github/workflows/` rechazado ; **parcial** en EN-001: los commits de los subagentes llevan la autoría git del humano |
 | H10 | Lo específico de Claude Code cabe en el «binding de roles» del perfil | Lista de cosas que habría que reescribir para otro harness | — |
 
@@ -60,15 +60,16 @@ Registro vivo del experimento: ¿puede el harness de Claude Code ejecutar los ro
 | 2026-11-02 23:15 | EN-001 / verifier | FL-004: el verificador omitió la prueba manual obligatoria (AES 05 §11); la compensó la demo humana | Fallo de agente | Ver FL-004 |
 | 2026-11-02 23:15 | EN-001 / orquestador | El orquestador no puede ejecutar `/cost` (es un comando del usuario, no una herramienta): la métrica de costo queda vacía salvo que el humano la aporte | Fricción | H8 necesita que el humano registre el costo o un hook que lo capture |
 | 2026-11-02 23:18 | EN-001 / orquestador | El plan del humano («la CI del PR de cierre ejecutará `@EN-001` al añadirla a `active-stories.txt`») choca con el workflow: el paso «Contexto AES» lee `active-stories.txt` **desde la base** (`main`), no desde la rama, y las ramas `spec/*` no tienen historia en curso. Hasta fusionar el cierre, ninguna CI ejecuta `@EN-001` | Hueco de control | Para `spec/<ID>-close` la CI debería ejecutar `<ID>` (o leer las historias activas de base ∪ rama, solo para añadir) |
+| 2026-11-02 23:37 | EN-001 / orquestador | El 89 % del costo de EN-001 ($4.34 de $4.89) es del orquestador (Opus), por contexto acumulado (10.1M tokens leídos de caché) y por redacción (50.8k tokens de salida: cuerpos de PR, hallazgos, retrospectiva). Los subagentes Sonnet costaron $0.55 y Haiku ~$0 | Costo | Propuesta: sesión nueva del orquestador por historia; redacción mecánica delegada en `mechanic`; probar un orquestador Sonnet en US-002 |
 
 Tipos: Confirmación · Fricción · Fallo de agente · Hueco de control · Diseño · Costo.
 
 ## Métricas por historia
 
-| Historia | Inicio | Fin | Ciclos FAIL | Intervenciones humanas | Bloqueos de hooks | Costo (`/cost`) |
-|---|---|---|---|---|---|---|
-| EN-001 | 2026-11-02 22:04 | 2026-11-02 23:15 | 0 (el FAIL del guardián por dependencias sin etiqueta no se cuenta) | 5: rechazo de la prueba sin criterio; ajustes del harness (#5, #6); etiqueta y CI de etiquetas (#8); fusión de #7 con check rojo (FL-003); aceptación con demo | 0 | No registrado |
-| US-001 | | | | | | |
+| Historia | Inicio | Fin | Ciclos FAIL | Intervenciones humanas | Bloqueos de hooks | Costo (`/cost`) | Tiempo de API | Tiempo total |
+|---|---|---|---|---|---|---|---|---|
+| EN-001 | 2026-11-02 22:04 | 2026-11-02 23:15 | 0 (el FAIL del guardián por dependencias sin etiqueta no se cuenta) | 5: rechazo de la prueba sin criterio; ajustes del harness (#5, #6); etiqueta y CI de etiquetas (#8); fusión de #7 con check rojo (FL-003); aceptación con demo | 0 | **$4.89**: Opus $4.34 (89 %), Sonnet $0.55, Haiku ~$0 | 14m15s | 1h31m |
+| US-001 | | | | | | | | |
 
 ## Portabilidad (para H10)
 
