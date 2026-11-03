@@ -124,13 +124,21 @@ jobs:
         working-directory: tests/acceptance
         env:
           STORY: ${{ steps.ctx.outputs.story }}
+          BASE: origin/${{ github.base_ref }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/red-report.json
         run: |
-          echo "Las pruebas de @$STORY deben FALLAR contra el código actual (RED confirmado)."
-          if npx playwright test --grep "@$STORY" --reporter=list; then
-            echo "::error::Las pruebas de @$STORY pasan contra el código actual: no prueban la funcionalidad nueva (AES 05 §2.2)."
-            exit 1
+          echo "Las pruebas de @$STORY deben EJECUTARSE y FALLAR contra el código actual (AES 05 §2.2)."
+          # «RED de arranque» solo se acepta si la base todavía no tiene código de aplicación.
+          bootstrap=0
+          git cat-file -e "$BASE:src" 2>/dev/null || bootstrap=1
+          npx playwright test --grep "@$STORY" --reporter=list,json || true
+          # El verificador se toma de la base (main), igual que el guardián.
+          if git cat-file -e "$BASE:ci/red-check.mjs" 2>/dev/null; then
+            git show "$BASE:ci/red-check.mjs" > "$RUNNER_TEMP/red-check.mjs"
+          else
+            cp ../../ci/red-check.mjs "$RUNNER_TEMP/red-check.mjs"
           fi
-          echo "RED confirmado. Revisa en el reporte que cada prueba falle por la razón esperada."
+          node "$RUNNER_TEMP/red-check.mjs" "$PLAYWRIGHT_JSON_OUTPUT_NAME" "$STORY" "$bootstrap"
 
       - name: Aceptación (historia en curso + regresión)
         if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind != 'qa' }}
