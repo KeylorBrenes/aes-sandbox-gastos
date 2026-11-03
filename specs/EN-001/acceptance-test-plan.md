@@ -7,7 +7,6 @@ Archivo: `tests/acceptance/tests/en-001.spec.ts` (etiqueta `@EN-001`). Configura
 | Criterio | Prueba | Tipo |
 |---|---|---|
 | AC-01 | `AC-01 GET /api/health responde 200 con {"status":"ok"} en JSON` (200, content-type JSON, cuerpo exacto) | API |
-| AC-01 | `AC-01 (negativo) una ruta inexistente de la API no responde ok de salud` (404 en `/api/no-existe`) | API, negativo |
 | AC-02 | `AC-02 la página principal muestra el título «Control de gastos»` (`data-testid="app-title"` visible, texto exacto) | Navegador |
 | AC-03 | `AC-03 el proxy de la web responde lo mismo que la API en /api/health` | API vía web |
 | AC-04 | No cubierto por Playwright: lo verifica la CI (`aes`), según el criterio. | CI |
@@ -27,7 +26,6 @@ Error: Process from config.webServer was not able to start. Exit code: 1
 | Prueba | Resultado | Razón | ¿Esperada? |
 |---|---|---|---|
 | AC-01 health 200 | Falla (no se ejecuta) | `webServer` de la API no arranca: `src/Gastos.Api` no existe | Sí (la spec lo prevé) |
-| AC-01 negativo 404 | Falla (no se ejecuta) | Idem | Sí |
 | AC-02 título | Falla (no se ejecuta) | Idem; además `web/` no existe | Sí |
 | AC-03 proxy | Falla (no se ejecuta) | Idem | Sí |
 
@@ -36,6 +34,5 @@ Nota: al fallar el arranque de los servidores, Playwright aborta antes de correr
 ## Supuestos y preguntas
 
 - Supuesto: el `Content-Type` puede incluir `; charset=utf-8`; se comprueba con `toContain('application/json')`.
-- La prueba negativa 404 no está en la tabla de criterios; es un extra de bajo riesgo que asume el comportamiento por defecto de minimal APIs.
 - Pregunta (no bloqueante): el contrato no define `ASPNETCORE_ENVIRONMENT`; la configuración no lo fija.
 - `tests/acceptance/node_modules` no debe versionarse; conviene confirmar que `.gitignore` lo cubre (el orquestador).

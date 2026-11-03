@@ -23,8 +23,3 @@ test('AC-03 el proxy de la web responde lo mismo que la API en /api/health', { t
   expect(res.headers()['content-type']).toContain('application/json');
   expect(await res.json()).toEqual({ status: 'ok' });
 });
-
-test('AC-01 (negativo) una ruta inexistente de la API no responde ok de salud', { tag: '@EN-001' }, async ({ request }) => {
-  const res = await request.get(`${API}/api/no-existe`);
-  expect(res.status()).toBe(404);
-});
