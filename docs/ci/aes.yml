@@ -4,6 +4,7 @@
 # Un único job "aes" (el check obligatorio del ruleset). Según la rama:
 #   task/<ID>/<TASK>  guardián AES (desde main) + build/test + aceptación de <ID> y de las historias activas
 #   qa/<ID>           build/test + RED automático: las pruebas de <ID> DEBEN fallar contra el código actual
+#   spec/<ID>-close   build/test + aceptación de <ID> (debe ejecutarse y pasar) + regresión de historias activas
 #   spec/*, otras     build/test + regresión de historias activas
 #   push a main       build/test + regresión de historias activas
 name: aes
@@ -43,6 +44,8 @@ jobs:
             case "$HEAD_BRANCH" in
               task/*/*) kind=task; story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
               qa/*)     kind=qa;   story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              spec/*-close)
+                        kind=close; story=${HEAD_BRANCH#spec/}; story=${story%-close} ;;
               *)        kind=other ;;
             esac
             base="origin/$BASE_BRANCH"
