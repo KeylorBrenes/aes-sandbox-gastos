@@ -1,0 +1,4 @@
+# Historias cuyas pruebas de aceptación forman parte de la regresión en main.
+# Una por línea (EN-001, US-001, ...). Solo el orquestador la modifica, por PR aprobado,
+# cuando una historia queda Accepted. Las pruebas de historias no listadas solo se ejecutan
+# en su rama qa/<ID> (RED) y en sus ramas task/<ID>/* (GREEN).
