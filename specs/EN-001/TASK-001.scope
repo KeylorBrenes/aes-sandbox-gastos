@@ -1,0 +1,5 @@
+# Superficie de EN-001/TASK-001. Un glob por línea ("*" incluye subcarpetas).
+Gastos.slnx
+src/Gastos.Api/*
+tests/Gastos.Api.Tests/*
+web/*
