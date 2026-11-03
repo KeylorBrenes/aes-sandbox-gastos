@@ -25,11 +25,24 @@ Tu terminal normal sigue usando tus credenciales. Solo las sesiones de Claude Co
    Copy-Item .claude\settings.local.example.json .claude\settings.local.json
    ```
 3. Edita `.claude/settings.local.json`: pon el App ID y la ruta de la llave **con barras normales** (`C:/Users/...`).
-4. Prueba desde Git Bash, en la raíz del repo:
+4. Prueba desde cualquier terminal, en la raíz del repo (el script lee `settings.local.json` si las variables no están definidas):
    ```bash
-   export AES_APP_ID=... AES_APP_INSTALLATION_ID=177994202 AES_APP_PRIVATE_KEY="C:/Users/<tú>/.aes/aes-agent.pem"
    bash .claude/scripts/gh-app-token.sh | cut -c1-8   # debe imprimir "ghs_...."
    ```
+
+## Autoría de los commits (opcional, recomendado)
+
+Sin esto, los commits que hacen los agentes llevan **tu** nombre y correo de git, y en el historial no se distingue qué escribió un agente y qué escribiste tú. Con las variables `GIT_AUTHOR_*` y `GIT_COMMITTER_*` de la plantilla, todo commit hecho dentro de Claude Code queda firmado por el bot de la app, y GitHub lo muestra con su avatar.
+
+1. El *slug* de la app es el nombre en minúsculas que aparece en su URL: `https://github.com/apps/<slug>`.
+2. Obtén el ID del usuario bot:
+   ```bash
+   gh api "/users/<slug>%5Bbot%5D" --jq .id
+   ```
+3. En `.claude/settings.local.json`, reemplaza `REEMPLAZAR_SLUG` por el slug y `REEMPLAZAR_BOT_ID` por ese número.
+4. Comprueba en la próxima sesión: `git log -1 --format='%an <%ae>'` después de un commit de un agente.
+
+Tus commits fuera de Claude Code siguen saliendo con tu identidad.
 
 ## Cómo funciona el truco de `GIT_CONFIG_*`
 

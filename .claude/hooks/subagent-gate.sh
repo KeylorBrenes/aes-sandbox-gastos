@@ -36,14 +36,17 @@ if [[ -n "$(git status --porcelain --untracked-files=normal -- . ':!**/bin/**' '
   failures+=("hay cambios sin commit (git status no está limpio)")
 fi
 
-# 3. Validaciones del proyecto, si existen.
-if compgen -G "*.slnx" >/dev/null || compgen -G "*.sln" >/dev/null; then
-  { dotnet build -warnaserror -nologo -v q && dotnet test --no-build -nologo -v q; } >>"$log" 2>&1 \
-    || failures+=(".NET (build -warnaserror / test)")
-fi
-if [[ -f web/package.json ]]; then
-  { npm --prefix web run lint --silent && npm --prefix web test --silent && npm --prefix web run build --silent; } >>"$log" 2>&1 \
-    || failures+=("web (lint / test / build)")
+# 3. Validaciones del proyecto, si existen. Solo en ramas de tarea: en el cierre
+#    (spec/<ID>-close) mechanic solo toca documentación.
+if [[ -n "$scope" ]]; then
+  if compgen -G "*.slnx" >/dev/null || compgen -G "*.sln" >/dev/null; then
+    { dotnet build -warnaserror -nologo -v q && dotnet test --no-build -nologo -v q; } >>"$log" 2>&1 \
+      || failures+=(".NET (build -warnaserror / test)")
+  fi
+  if [[ -f web/package.json ]]; then
+    { npm --prefix web run lint --silent && npm --prefix web test --silent && npm --prefix web run build --silent; } >>"$log" 2>&1 \
+      || failures+=("web (lint / test / build)")
+  fi
 fi
 
 if (( ${#failures[@]} > 0 )); then

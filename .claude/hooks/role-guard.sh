@@ -38,6 +38,11 @@ case "$AES_ROLE" in
       aes_block "'$rel' es una ruta protegida. Si necesitas cambiarla, detente y reporta BLOCKED con el motivo."
     fi
     branch=$(aes_branch "$root")
+    # mechanic consolida documentación en el cierre: en spec/<ID>-close solo puede tocar docs/.
+    if [[ "$AES_ROLE" == "mechanic" && "$branch" =~ ^spec/[^/]+-close$ ]]; then
+      [[ "$rel" =~ ^docs/ ]] && exit 0
+      aes_block "en la rama de cierre '$branch' solo puedes escribir en docs/ ('$rel')."
+    fi
     scope_rel=$(aes_scope_file "$branch")
     if [[ -z "$scope_rel" ]]; then
       aes_block "estás en la rama '$branch'. Solo se implementa en ramas task/<ID>/<TASK>. Reporta BLOCKED."

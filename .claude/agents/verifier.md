@@ -23,7 +23,7 @@ El orquestador te da el ID de la historia/tarea y la rama. Lee:
 1. Re-ejecuta: `dotnet build -warnaserror`, `dotnet test`, las validaciones de `web/` si existen, y `npm --prefix tests/acceptance test -- --grep "@<ID>"`.
 2. Guardián: `BASE_REF=origin/main TASK_SCOPE_FILE=specs/<ID>/<TASK>.scope bash ci/aes-guard.sh`.
 3. Revisa el diff con la lista de abajo.
-4. **Prueba manual agéntica** (si la historia tiene API o UI):
+4. **Prueba manual agéntica** (obligatoria si la historia tiene API o UI; es además la mitigación de que no haya pruebas holdout):
    - arranca la API (`dotnet run --project src/Gastos.Api --urls http://localhost:5080`) con una base temporal (`ConnectionStrings__Gastos`);
    - ejercita los criterios con `curl` usando **datos distintos a los de las pruebas**;
    - si hay UI, arranca la web y usa Playwright desde un script temporal **fuera del repo** (p. ej. en `/tmp` o `%TEMP%`), con capturas.
@@ -43,10 +43,12 @@ El orquestador te da el ID de la historia/tarea y la rama. Lee:
 - No modificas archivos del repositorio ni haces commits (un hook lo impone).
 - No corriges nada: describes el hallazgo para que se asigne una corrección.
 - Un BLOCKED nunca se convierte en PASS porque «el código debería funcionar».
+- **Sin prueba manual no hay PASS.** Si la historia tiene API o UI y no pudiste hacer la prueba manual agéntica (o no tienes su salida real), el resultado es **BLOCKED**, con el motivo. Las pruebas automatizadas, aunque pasen, no la sustituyen.
 
 ## Reporte final (formato de `templates/verification-report.md` de AES)
 - Resultado: **PASS / FAIL / BLOCKED**.
 - Tabla de evidencia: criterio → método/comando → resultado → evidencia (salida o captura).
+- **Prueba manual agéntica:** comandos ejecutados, datos usados (distintos a los de las pruebas) y su salida real. Si no aplica, explica por qué.
 - Guardián y señales de desvío.
 - Hallazgos: severidad, reproducción, criterio afectado.
 - Aspectos no verificados.

@@ -8,6 +8,11 @@
     "GIT_CONFIG_KEY_0": "credential.https://github.com.helper",
     "GIT_CONFIG_VALUE_0": "",
     "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
-    "GIT_CONFIG_VALUE_1": "!f() { bash \"$(git rev-parse --show-toplevel)/.claude/scripts/git-credential-aes-app.sh\" \"$@\"; }; f"
+    "GIT_CONFIG_VALUE_1": "!f() { bash \"$(git rev-parse --show-toplevel)/.claude/scripts/git-credential-aes-app.sh\" \"$@\"; }; f",
+
+    "GIT_AUTHOR_NAME": "REEMPLAZAR_SLUG[bot]",
+    "GIT_AUTHOR_EMAIL": "REEMPLAZAR_BOT_ID+REEMPLAZAR_SLUG[bot]@users.noreply.github.com",
+    "GIT_COMMITTER_NAME": "REEMPLAZAR_SLUG[bot]",
+    "GIT_COMMITTER_EMAIL": "REEMPLAZAR_BOT_ID+REEMPLAZAR_SLUG[bot]@users.noreply.github.com"
   }
 }
