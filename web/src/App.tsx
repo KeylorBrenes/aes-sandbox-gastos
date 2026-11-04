@@ -63,6 +63,7 @@ function App() {
     <main>
       <h1 data-testid="app-title">Control de gastos</h1>
 
+      {month && (
       <form data-testid="expense-form" noValidate onSubmit={submit}>
         <label>
           Monto
@@ -94,6 +95,7 @@ function App() {
           Guardar
         </button>
       </form>
+      )}
 
       <p>
         Total del mes:{' '}

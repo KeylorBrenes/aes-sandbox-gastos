@@ -37,7 +37,7 @@ test('muestra el título de la aplicación', () => {
 test('guardar con éxito agrega el gasto, actualiza el total y limpia el formulario', async () => {
   mockApi(() => Response.json({}, { status: 201 }))
   render(<App />)
-  await waitFor(() => expect(screen.getByTestId('month-total').getAttribute('data-amount')).toBe('0'))
+  await screen.findByTestId('expense-form')
 
   fireEvent.change(screen.getByTestId('expense-amount'), { target: { value: '12500.5' } })
   fireEvent.change(screen.getByTestId('expense-note'), { target: { value: 'Super' } })
@@ -53,7 +53,7 @@ test('guardar con éxito agrega el gasto, actualiza el total y limpia el formula
 test('un 400 muestra el error junto al campo y no agrega nada', async () => {
   mockApi(() => Response.json({ errors: { amount: ['El monto debe ser mayor a 0.'] } }, { status: 400 }))
   render(<App />)
-  fireEvent.change(screen.getByTestId('expense-amount'), { target: { value: '-5' } })
+  fireEvent.change(await screen.findByTestId("expense-amount"), { target: { value: "-5" } })
   fireEvent.click(screen.getByTestId('expense-submit'))
 
   expect((await screen.findByTestId('field-error-amount')).textContent).toBe('El monto debe ser mayor a 0.')
