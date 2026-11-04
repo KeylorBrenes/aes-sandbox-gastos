@@ -13,6 +13,7 @@ public class GastosDbContext(DbContextOptions<GastosDbContext> options) : DbCont
             e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
             e.Property(x => x.CategoryId).HasMaxLength(50).IsRequired();
             e.Property(x => x.Note).HasMaxLength(200);
+            e.Property(x => x.CreatedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
             e.HasIndex(x => x.Date);
         });
     }
