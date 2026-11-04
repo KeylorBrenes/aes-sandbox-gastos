@@ -84,3 +84,32 @@ public class ExpenseEndpointsTests(ApiFactory factory) : IClassFixture<ApiFactor
         Assert.Equal(DateTime.Now.ToString("yyyy-MM"), list.GetProperty("month").GetString());
     }
 }
+
+public class ExpenseTypeAndUtcTests(ApiFactory factory) : IClassFixture<ApiFactory>
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    [Fact]
+    public async Task Post_NonNumericAmount_Returns400ProblemJsonWithAmountError()
+    {
+        var res = await _client.PostAsync("/api/expenses", new StringContent(
+            """{"amount":"abc","date":"2026-11-04","categoryId":"otros"}""", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+        var errors = (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors");
+        Assert.Equal(["amount"], errors.EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public async Task CreatedAt_IsUtcWithZ_InPostAndGet()
+    {
+        var post = await _client.PostAsJsonAsync("/api/expenses", new { amount = 1, date = "2012-05-05", categoryId = "otros" });
+        var created = (await post.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("createdAt").GetString();
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/expenses?month=2012-05");
+        var listed = list.GetProperty("items")[0].GetProperty("createdAt").GetString();
+
+        Assert.EndsWith("Z", created);
+        Assert.EndsWith("Z", listed);
+    }
+}

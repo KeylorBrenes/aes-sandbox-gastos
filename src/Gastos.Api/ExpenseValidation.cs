@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Globalization;
 
 namespace Gastos.Api;
@@ -43,4 +44,38 @@ public static class ExpenseValidation
     public static bool TryParseMonth(string? month, out DateOnly first) =>
         DateOnly.TryParseExact(month is { Length: 7 } ? month + "-01" : "", "yyyy-MM-dd",
             CultureInfo.InvariantCulture, DateTimeStyles.None, out first);
+}
+
+public static class ExpenseRequestParser
+{
+    /// Lee el cuerpo JSON sin que un tipo incorrecto anule el 400 con errores por campo.
+    public static CreateExpenseRequest Parse(JsonElement body, Dictionary<string, string[]> errors)
+    {
+        decimal? amount = null;
+        string? date = null, categoryId = null, note = null;
+        if (body.ValueKind == JsonValueKind.Object)
+        {
+            amount = ReadAmount(body, errors);
+            date = ReadString(body, "date", "La fecha debe ser texto.", errors);
+            categoryId = ReadString(body, "categoryId", "La categoría debe ser texto.", errors);
+            note = ReadString(body, "note", "La nota debe ser texto.", errors);
+        }
+        return new CreateExpenseRequest(amount, date, categoryId, note);
+    }
+
+    private static decimal? ReadAmount(JsonElement body, Dictionary<string, string[]> errors)
+    {
+        if (!body.TryGetProperty("amount", out var v) || v.ValueKind == JsonValueKind.Null) return null;
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetDecimal(out var d)) return d;
+        errors["amount"] = ["El monto debe ser un número."];
+        return null;
+    }
+
+    private static string? ReadString(JsonElement body, string name, string message, Dictionary<string, string[]> errors)
+    {
+        if (!body.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null) return null;
+        if (v.ValueKind == JsonValueKind.String) return v.GetString();
+        errors[name] = [message];
+        return null;
+    }
 }

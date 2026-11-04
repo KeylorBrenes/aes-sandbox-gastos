@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace Gastos.Api;
@@ -15,10 +16,13 @@ public static class ExpenseEndpoints
 
         var group = app.MapGroup("/api/expenses");
 
-        group.MapPost("/", async (CreateExpenseRequest request, GastosDbContext db) =>
+        group.MapPost("/", async (JsonElement body, GastosDbContext db) =>
         {
             var today = DateOnly.FromDateTime(DateTime.Now);
+            var typeErrors = new Dictionary<string, string[]>();
+            var request = ExpenseRequestParser.Parse(body, typeErrors);
             var errors = ExpenseValidation.Validate(request, today, out var date);
+            foreach (var (k, v) in typeErrors) errors[k] = v;
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var expense = new Expense
