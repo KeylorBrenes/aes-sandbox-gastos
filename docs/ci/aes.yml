@@ -2,7 +2,8 @@
 # Para activarlo: copiar a .github/workflows/aes.yml (la app de los agentes no puede: requiere tu cuenta).
 #
 # Un único job "aes" (el check obligatorio del ruleset). Según la rama:
-#   task/<ID>/<TASK>  guardián AES (desde main) + build/test + aceptación de <ID> y de las historias activas
+#   task/<ID>/<TASK>  guardián AES (desde main) + build/test + aceptación de los criterios de la tarea
+#                     (specs/<ID>/<TASK>.criteria; sin ese archivo, la historia completa) + historias activas
 #   qa/<ID>           build/test + RED automático: las pruebas de <ID> DEBEN fallar contra el código actual
 #   spec/<ID>-close   build/test + aceptación de <ID> (debe ejecutarse y pasar) + regresión de historias activas
 #   spec/*, otras     build/test + regresión de historias activas
@@ -39,10 +40,10 @@ jobs:
           HEAD_BRANCH: ${{ github.head_ref }}
           BASE_BRANCH: ${{ github.base_ref }}
         run: |
-          kind=main; story=""
+          kind=main; story=""; task=""
           if [[ "$EVENT" == "pull_request" ]]; then
             case "$HEAD_BRANCH" in
-              task/*/*) kind=task; story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
+              task/*/*) kind=task; story=$(cut -d/ -f2 <<< "$HEAD_BRANCH"); task=$(cut -d/ -f3 <<< "$HEAD_BRANCH") ;;
               qa/*)     kind=qa;   story=$(cut -d/ -f2 <<< "$HEAD_BRANCH") ;;
               spec/*-close)
                         kind=close; story=${HEAD_BRANCH#spec/}; story=${story%-close} ;;
@@ -54,10 +55,23 @@ jobs:
           fi
           # Historias activas: siempre la versión de la base (main), no la de la rama.
           active=$(git show "$base:specs/active-stories.txt" 2>/dev/null | sed 's/#.*//' | tr -d ' \r' | grep -v '^$' | paste -sd'|' || true)
+          # Etiquetas a ejecutar para la historia en curso: por criterio si la tarea tiene .criteria
+          # (leído de la base, igual que la superficie), si no la historia completa.
+          wanted=""
+          if [[ -n "$story" ]]; then
+            wanted="$story"
+            if [[ "$kind" == "task" ]]; then
+              crit=$(git show "$base:specs/$story/$task.criteria" 2>/dev/null | sed 's/#.*//' | tr -d ' \r' | grep -E '^AC-[0-9]+$' || true)
+              if [[ -n "$crit" ]]; then
+                wanted=$(sed "s/^/$story-/" <<< "$crit" | paste -sd'|')
+              fi
+            fi
+          fi
+          echo "wanted=$wanted" >> "$GITHUB_OUTPUT"
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
           echo "story=$story" >> "$GITHUB_OUTPUT"
           echo "active=$active" >> "$GITHUB_OUTPUT"
-          echo "Rama: ${HEAD_BRANCH:-main} | tipo: $kind | historia: ${story:-—} | activas: ${active:-ninguna}"
+          echo "Rama: ${HEAD_BRANCH:-main} | tipo: $kind | historia: ${story:-—} | ejecutar: ${wanted:-—} | activas: ${active:-ninguna}"
 
       # ---------- Guardián (solo ramas de programador) ----------
       - name: Guardián AES (copia de main)
@@ -149,10 +163,10 @@ jobs:
         if: ${{ steps.pw.outputs.ready == 'true' && steps.ctx.outputs.kind != 'qa' }}
         working-directory: tests/acceptance
         env:
-          STORY: ${{ steps.ctx.outputs.story }}
+          WANTED: ${{ steps.ctx.outputs.wanted }}
           ACTIVE: ${{ steps.ctx.outputs.active }}
         run: |
-          tags=$(printf '%s|%s' "$STORY" "$ACTIVE" | tr '|' '\n' | { grep -v '^$' || true; } | sort -u | sed 's/^/@/' | paste -sd'|')
+          tags=$(printf '%s|%s' "$WANTED" "$ACTIVE" | tr '|' '\n' | { grep -v '^$' || true; } | sort -u | sed 's/^/@/' | paste -sd'|')
           if [[ -z "$tags" ]]; then
             echo "No hay historias activas ni en curso: no se ejecuta aceptación."
             exit 0

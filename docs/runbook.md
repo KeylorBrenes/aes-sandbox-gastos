@@ -47,6 +47,8 @@ En Claude Code:
 | PR `task/<ID>/<TASK>` | Informe del verificador, alertas del guardián y, si lo hay, el cambio de dependencias (pones `aes:deps-approved` tú) | Comentario del orquestador y el check `aes` |
 | Cierre | La demo: arrancas la app y pruebas el flujo. Antes de fusionar el PR de cierre, el log de la CI debe decir `tipo: close` y mostrar la aceptación ejecutada | Instrucciones del orquestador y log del check `aes` |
 
+**Durante el ciclo, no dejes la app corriendo** para tus pruebas: el gate de los subagentes los frena si encuentra algo escuchando en 5080, 5081 o 5173, porque la evidencia saldría de tu servidor y no del suyo. Haz tu demo solo cuando el orquestador te la pida.
+
 **Tres reglas para ti:**
 1. **Nunca fusiones con el check en rojo.** El ruleset `main-ci` debería impedirlo; si te deja, es un fallo de configuración: avísame.
 2. **Nunca fusiones un PR de tarea sin el informe del verificador.** Fue el incidente de EN-001 (FL-003).
