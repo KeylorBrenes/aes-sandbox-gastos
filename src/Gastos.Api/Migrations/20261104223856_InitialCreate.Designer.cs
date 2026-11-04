@@ -17,7 +17,6 @@ namespace Gastos.Api.Migrations
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
-#pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
 
             modelBuilder.Entity("Gastos.Api.Expense", b =>
@@ -50,7 +49,6 @@ namespace Gastos.Api.Migrations
 
                     b.ToTable("Expenses");
                 });
-#pragma warning restore 612, 618
         }
     }
 }
