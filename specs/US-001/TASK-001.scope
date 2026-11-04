@@ -1,0 +1,5 @@
+# Superficie de US-001/TASK-001. Un glob por línea ("*" incluye subcarpetas).
+src/Gastos.Api/*
+tests/Gastos.Api.Tests/*
+web/src/*
+.config/dotnet-tools.json
