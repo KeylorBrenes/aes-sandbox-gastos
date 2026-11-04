@@ -20,7 +20,7 @@ Saber en segundos en qué se va el dinero cada mes y si se está dentro del pres
 | ID | Tipo | Epic | Título | Track | Pts | Prioridad | Estado |
 |---|---|---|---|---|---|---|---|
 | EN-001 | Enabler | EPIC-00 | Esqueleto de la solución (API, web, pruebas, CI) | T2 | 3 | P0 | Accepted |
-| US-001 | Historia | EPIC-01 | Registrar un gasto y verlo en la lista del mes | T2 | 5 | P0 | Proposed |
+| US-001 | Historia | EPIC-01 | Registrar un gasto y verlo en la lista del mes | T2 | 5 | P0 | Ready |
 | US-002 | Historia | EPIC-01 | Editar y eliminar un gasto | T2 | 3 | P1 | Draft |
 | US-003 | Historia | EPIC-02 | Definir el presupuesto mensual por categoría | T2 | 5 | P1 | Draft |
 | US-004 | Historia | EPIC-03 | Resumen del mes: gastado vs. presupuesto por categoría | T2 | 5 | P1 | Draft |
