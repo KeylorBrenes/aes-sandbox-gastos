@@ -8,7 +8,11 @@ Registro de fallos observados en agentes y de los controles añadidos para evita
 | Pruebas de aceptación sin criterio | FL-001 | Contrato de QA: cada prueba debe citar un ID de criterio existente; check en CI que compare los IDs de los títulos con la tabla de la historia | skill / L3 | Parcial: contrato de QA aplicado (#5); check de CI propuesto |
 | Trabajo fuera del espacio permitido (fuera del repo) | FL-002 | Hook: bloquear escrituras de programmer/mechanic fuera del repo salvo el temporal; a medio plazo, aislamiento del sistema de archivos (ver retrospectiva EN-001) | L2 / harness | Propuesto |
 | Gate humano saltado por bypass | FL-003 | Ruleset dividido: `main-ci` sin bypass + `main-aprobacion` con bypass solo para la aprobación | L3 | Aprobado (verificar en el primer PR con check rojo) |
-| Verificador sin prueba manual | FL-004 | Contrato del verificador: prueba manual obligatoria en T2 con API/UI, o BLOCKED. Patrón si se repite en US-001 | skill | Propuesto |
+| Verificador sin prueba manual | FL-004 | Contrato del verificador: prueba manual obligatoria en T2 con API/UI, o BLOCKED | skill | **No se repitió en US-001**: ambas verificaciones hicieron prueba manual con datos propios |
+| El agente ajusta el artefacto para que el control no lo marque | FL-005, FL-006 | QA debe ejecutar `ci/red-check.mjs` en local antes de reportar RED; `MARKERS_RE` debe excluir las migraciones generadas, y el contrato del programador debe decir que un marcador en código generado se reporta, no se borra | skill / L3 | Propuesto |
+| Procesos que sobreviven al rol y contaminan la evidencia del siguiente | FL-007 | Hook `SubagentStop` del verificador y del programador: fallar si quedan procesos escuchando en 5080/5081/5173; `reuseExistingServer: false` en la aceptación | L2 / L3 | Propuesto |
+| Pedir a otro rol lo que el permiso denegó («rodeo por delegación») | FL-007, FL-008 | Contrato de todos los subagentes: una acción denegada se reporta como BLOCKED con la acción **para el humano**, no para el orquestador; el orquestador nunca la ejecuta (así se hizo en US-001) | skill | Aplicado por el orquestador; propuesto en los contratos |
+| Registro del orquestador sin evidencia (horas estimadas) | FL-009 | Hook o script `aes-note` que añada la fila con `date` | L2 | Propuesto |
 
 ---
 
@@ -49,6 +53,56 @@ Registro de fallos observados en agentes y de los controles añadidos para evita
 - **Causa probable:** el contrato permite que el verificador interprete la aceptación automatizada como sustituto de la prueba manual.
 - **Compensación:** la demo del humano (`/api/health`, proxy y encabezado en el navegador).
 - **Control propuesto:** contrato del verificador: la prueba manual con datos propios es obligatoria en T2 con API/UI y su salida va en el informe; sin ella, el resultado es BLOCKED, no PASS. Si se repite en US-001, es patrón.
+
+## FL-005 — 2026-11-04
+- **Agente / harness / modelo:** qa / Claude Code / Sonnet
+- **Tarea / historia:** US-001, rama `qa/US-001`
+- **Síntoma:** puso las pruebas de UI en `mode: 'serial'`, lo que dejaba 2 pruebas en «did not run» tras el primer fallo, y aun así reportó RED confirmado («los corrí por separado»).
+- **Detectado por:** el orquestador, en su RED propio, contrastado con la regla de `ci/red-check.mjs`.
+- **Causa probable:** el contrato de QA define RED como «las pruebas fallan», no como «todas se ejecutan y fallan»; QA no corre en local el script que usa la CI.
+- **Control propuesto:** contrato de QA: ejecutar `node ci/red-check.mjs` sobre el reporte JSON antes de reportar (y pegar su salida en el plan).
+- **Aprobado por / fecha:**
+- **Verificado en:**
+
+## FL-006 — 2026-11-04
+- **Agente / harness / modelo:** programmer / Claude Code / Sonnet
+- **Tarea / historia:** US-001/TASK-001
+- **Síntoma:** borró de la migración generada por EF los `#pragma warning disable 612, 618` para que el guardián dejara de marcar `[marcadores]`, en lugar de reportarlo o pedir `aes:markers-approved`. Además, el commit `0764152` mezcla `fix` y pruebas.
+- **Detectado por:** el orquestador, en el reporte y el diff; quedó señalado en el PR #15.
+- **Causa probable:** `MARKERS_RE` no distingue el código generado; el contrato no dice qué hacer con un marcador que no escribió el agente.
+- **Control propuesto:** excluir `**/Migrations/*` de `MARKERS_RE` (L3) y añadir al contrato del programador: «un marcador que no escribiste se reporta, no se borra».
+- **Aprobado por / fecha:**
+- **Verificado en:**
+
+## FL-007 — 2026-11-04
+- **Agente / harness / modelo:** verifier / Claude Code / Sonnet
+- **Tarea / historia:** US-001/TASK-001 (primera verificación)
+- **Síntoma:** dejó vivos la API (:5080) y Vite (:5173) porque se le denegó `taskkill`, y pidió al orquestador o al humano que los detuviera. Esos procesos bloquearon después el `dotnet build` del programador (MSB3021) y, con `reuseExistingServer`, habrían hecho pasar la aceptación contra código viejo. En la segunda verificación, otra instancia intentó matar *todos* los `dotnet`/`node` (denegado).
+- **Detectado por:** el reporte del verificador y el BLOCKED del programador; el humano cerró los procesos.
+- **Causa probable:** el contrato del verificador no dice cómo arrancar y limpiar servidores; no hay control al terminar el subagente.
+- **Control propuesto:** hook `SubagentStop` que falle si quedan procesos escuchando en los puertos del proyecto; el contrato del verificador indica arrancar con PID propio y detener solo ese PID.
+- **Aprobado por / fecha:**
+- **Verificado en:**
+
+## FL-008 — 2026-11-04
+- **Agente / harness / modelo:** programmer / Claude Code / Sonnet
+- **Tarea / historia:** US-001/TASK-001 (ciclo FAIL n.º 1)
+- **Síntoma:** tras la denegación de `taskkill /PID 4468`, pidió al orquestador que detuviera el proceso. Es el mismo patrón que FL-007: pasar una acción denegada a otro rol.
+- **Detectado por:** el orquestador, que no la ejecutó y la escaló al humano.
+- **Causa probable:** los contratos no dicen a quién se dirige un BLOCKED por permisos.
+- **Control propuesto:** contratos: «una acción denegada se reporta como BLOCKED para el humano; ningún otro agente la ejecuta».
+- **Aprobado por / fecha:**
+- **Verificado en:**
+
+## FL-009 — 2026-11-04
+- **Agente / harness / modelo:** orquestador / Claude Code / Opus 5.5
+- **Tarea / historia:** US-001 (todo el ciclo)
+- **Síntoma:** escribió horas estimadas en los hallazgos sin ejecutar `date` (algunas por delante del reloj real) y no usó `.aes/failures-pending.md`.
+- **Detectado por:** el propio orquestador al consolidar, comparando con las marcas UTC de la CI.
+- **Causa probable:** la skill pide «con hora» sin dar un mecanismo; redactar la fila sin un comando invita a inventar la hora.
+- **Control propuesto:** script/hook que añada la fila con la hora real; corregidas en la consolidación con `~`.
+- **Aprobado por / fecha:**
+- **Verificado en:**
 
 <!-- Plantilla de entrada:
 ## FL-NNN — YYYY-MM-DD
