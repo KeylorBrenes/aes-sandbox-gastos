@@ -59,3 +59,305 @@ test('un 400 muestra el error junto al campo y no agrega nada', async () => {
   expect((await screen.findByTestId('field-error-amount')).textContent).toBe('El monto debe ser mayor a 0.')
   expect(screen.queryAllByTestId('expense-item')).toHaveLength(0)
 })
+
+test('si la lista falla se muestra load-error con el formulario y al reintentar se carga', async () => {
+  let failing = true
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/categories') return Response.json(categories)
+      if (failing) return new Response(null, { status: 500 })
+      return Response.json({ month: '2026-11', items: [], total: 0 })
+    }),
+  )
+  render(<App />)
+
+  expect(await screen.findByTestId('load-error')).toBeTruthy()
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+
+  failing = false
+  fireEvent.click(screen.getByTestId('load-retry'))
+  await waitFor(() => expect(screen.queryByTestId('load-error')).toBeNull())
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+})
+
+test('si las categorías fallan por red se muestra load-error y el formulario', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/categories') throw new TypeError('network')
+      return Response.json({ month: '2026-11', items: [], total: 0 })
+    }),
+  )
+  render(<App />)
+
+  expect(await screen.findByTestId('load-error')).toBeTruthy()
+  expect(screen.getByTestId('load-retry')).toBeTruthy()
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+})
+
+test('expense-date es un input type="date" sin validación nativa', async () => {
+  mockApi(() => new Response(null, { status: 500 }))
+  render(<App />)
+  const date = (await screen.findByTestId('expense-date')) as HTMLInputElement
+  expect(date.type).toBe('date')
+  expect(date.value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(date.required).toBe(false)
+  expect(date.min).toBe('')
+  expect(date.max).toBe('')
+})
+
+type Item = { id: number; amount: number; date: string; categoryId: string; note: string | null }
+
+function mockCrud(putStatus = 200) {
+  let items: Item[] = [{ id: 7, amount: 1250.5, date: '2026-11-02', categoryId: 'otros', note: 'Super' }]
+  const calls: { method: string; url: string; body?: unknown }[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (url === '/api/categories') return Response.json(categories)
+      if (method === 'GET') {
+        return Response.json({ month: '2026-11', items, total: items.reduce((s, i) => s + i.amount, 0) })
+      }
+      const body = init?.body ? JSON.parse(init.body as string) : undefined
+      calls.push({ method, url, body })
+      if (method === 'PUT') {
+        if (putStatus === 400) return Response.json({ errors: { amount: ['Monto inválido.'] } }, { status: 400 })
+        items = items.map((i) => (url === `/api/expenses/${i.id}` ? { ...i, ...body } : i))
+        return Response.json(items[0])
+      }
+      if (method === 'DELETE') {
+        items = items.filter((i) => url !== `/api/expenses/${i.id}`)
+        return new Response(null, { status: 204 })
+      }
+      return Response.json({}, { status: 201 })
+    }),
+  )
+  return calls
+}
+
+const input = (id: string) => screen.getByTestId(id) as HTMLInputElement
+
+test('Editar llena el formulario, cambia a modo edición y Cancelar lo restablece', async () => {
+  mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+  expect(input('expense-amount').value).toBe('1250.5')
+  expect(input('expense-date').value).toBe('2026-11-02')
+  expect(input('expense-category').value).toBe('otros')
+  expect(input('expense-note').value).toBe('Super')
+  expect(screen.getByTestId('expense-submit').textContent).toBe('Guardar cambios')
+
+  fireEvent.click(screen.getByTestId('edit-cancel'))
+
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('create')
+  expect(input('expense-amount').value).toBe('')
+  expect(input('expense-note').value).toBe('')
+  expect(input('expense-category').value).toBe('alimentacion')
+  expect(screen.getByTestId('expense-submit').textContent).toBe('Guardar')
+  expect(screen.queryByTestId('edit-cancel')).toBeNull()
+})
+
+test('guardar la edición hace PUT, actualiza la lista y vuelve a modo alta', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+  fireEvent.change(input('expense-amount'), { target: { value: '99.9' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  await waitFor(() => expect(screen.getByTestId('expense-item').getAttribute('data-amount')).toBe('99.9'))
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({ method: 'PUT', url: '/api/expenses/7', body: { amount: 99.9, categoryId: 'otros' } })
+  expect(screen.getByTestId('month-total').getAttribute('data-amount')).toBe('99.9')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('create')
+  expect(input('expense-amount').value).toBe('')
+})
+
+test('un 400 al editar muestra el error y mantiene el modo edición', async () => {
+  mockCrud(400)
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+  fireEvent.change(input('expense-amount'), { target: { value: '-5' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  expect((await screen.findByTestId('field-error-amount')).textContent).toBe('Monto inválido.')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+  expect(screen.getByTestId('expense-item').getAttribute('data-amount')).toBe('1250.5')
+})
+
+test('Eliminar abre la confirmación dentro del ítem sin borrar y Cancelar la cierra', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+
+  expect(screen.getByTestId('delete-confirm')).toBeTruthy()
+  expect(screen.getByTestId('expense-item').contains(screen.getByTestId('delete-confirm'))).toBe(true)
+  expect(screen.getAllByTestId('expense-item')).toHaveLength(1)
+
+  fireEvent.click(screen.getByTestId('delete-confirm-no'))
+
+  expect(screen.queryByTestId('delete-confirm')).toBeNull()
+  expect(screen.getAllByTestId('expense-item')).toHaveLength(1)
+  expect(calls).toHaveLength(0)
+})
+
+test('Confirmar hace DELETE, quita el gasto y actualiza el total', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+
+  await waitFor(() => expect(screen.queryAllByTestId('expense-item')).toHaveLength(0))
+  expect(calls).toEqual([{ method: 'DELETE', url: '/api/expenses/7', body: undefined }])
+  expect(screen.getByTestId('month-total').getAttribute('data-amount')).toBe('0')
+})
+
+type Handler = (url: string, init?: RequestInit) => Promise<Response> | Response
+
+function mockWith(handler: Handler, extra: Item[] = []) {
+  const items: Item[] = [{ id: 7, amount: 1250.5, date: '2026-11-02', categoryId: 'otros', note: 'Super' }, ...extra]
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (url === '/api/categories') return Response.json(categories)
+      if (method === 'GET') return Response.json({ month: '2026-11', items, total: 1250.5 })
+      return handler(url, init)
+    }),
+  )
+}
+
+test.each([
+  ['500', () => new Response(null, { status: 500 })],
+  ['400', () => Response.json({}, { status: 400 })],
+  ['red caída', () => Promise.reject(new TypeError('network'))],
+])('si DELETE falla (%s) se muestra action-error y la confirmación sigue abierta', async (_name, fail) => {
+  mockWith(fail)
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+
+  const alert = await screen.findByTestId('action-error')
+  expect(alert.getAttribute('role')).toBe('alert')
+  expect(alert.textContent).not.toBe('')
+  expect(screen.getByTestId('delete-confirm')).toBeTruthy()
+  expect(screen.getAllByTestId('expense-item')).toHaveLength(1)
+
+  fireEvent.click(screen.getByTestId('delete-confirm-no'))
+  expect(screen.queryByTestId('action-error')).toBeNull()
+})
+
+test('un DELETE con 404 se trata como éxito', async () => {
+  mockWith(() => new Response(null, { status: 404 }))
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+
+  await waitFor(() => expect(screen.queryByTestId('delete-confirm')).toBeNull())
+  expect(screen.queryByTestId('action-error')).toBeNull()
+})
+
+test('el error de DELETE desaparece al reintentar con éxito', async () => {
+  let failing = true
+  mockWith(() => (failing ? new Response(null, { status: 500 }) : new Response(null, { status: 204 })))
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await screen.findByTestId('action-error')
+
+  failing = false
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await waitFor(() => expect(screen.queryByTestId('delete-confirm')).toBeNull())
+  expect(screen.queryByTestId('action-error')).toBeNull()
+})
+
+test('si guardar un alta falla por red se muestra action-error y el formulario conserva los datos', async () => {
+  mockWith(() => Promise.reject(new TypeError('network')))
+  render(<App />)
+  await screen.findByTestId('expense-item')
+  fireEvent.change(input('expense-amount'), { target: { value: '500' } })
+  fireEvent.change(input('expense-note'), { target: { value: 'Taxi' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  const alert = await screen.findByTestId('action-error')
+  expect(alert.getAttribute('role')).toBe('alert')
+  expect(input('expense-amount').value).toBe('500')
+  expect(input('expense-note').value).toBe('Taxi')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('create')
+})
+
+test('si guardar una edición falla por red o 500 se mantiene el modo edición y el mensaje se quita al cancelar', async () => {
+  mockWith(() => Promise.reject(new TypeError('network')))
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+  fireEvent.change(input('expense-amount'), { target: { value: '99' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  await screen.findByTestId('action-error')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+  expect(input('expense-amount').value).toBe('99')
+
+  fireEvent.click(screen.getByTestId('edit-cancel'))
+  expect(screen.queryByTestId('action-error')).toBeNull()
+})
+
+test('un 500 al guardar muestra action-error y desaparece al guardar con éxito', async () => {
+  let failing = true
+  mockWith(() => (failing ? new Response(null, { status: 500 }) : Response.json({}, { status: 201 })))
+  render(<App />)
+  await screen.findByTestId('expense-item')
+  fireEvent.change(input('expense-amount'), { target: { value: '500' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+  await screen.findByTestId('action-error')
+
+  failing = false
+  fireEvent.click(screen.getByTestId('expense-submit'))
+  await waitFor(() => expect(screen.queryByTestId('action-error')).toBeNull())
+  expect(input('expense-amount').value).toBe('')
+})
+
+const second: Item = { id: 8, amount: 300, date: '2026-11-03', categoryId: 'otros', note: 'Taxi' }
+
+test('un error de DELETE desaparece al pulsar Editar en otro gasto', async () => {
+  mockWith(() => new Response(null, { status: 500 }), [second])
+  render(<App />)
+  const deletes = await screen.findAllByTestId('expense-delete')
+  fireEvent.click(deletes[0])
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-edit')[1])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+})
+
+test('un error de DELETE desaparece al abrir la confirmación de otro gasto', async () => {
+  mockWith(() => new Response(null, { status: 500 }), [second])
+  render(<App />)
+  const deletes = await screen.findAllByTestId('expense-delete')
+  fireEvent.click(deletes[0])
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-delete')[1])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
+  expect(screen.getAllByTestId('delete-confirm')).toHaveLength(1)
+})
+
+test('un error de guardado desaparece al pulsar Eliminar en un gasto', async () => {
+  mockWith(() => Promise.reject(new TypeError('network')), [second])
+  render(<App />)
+  await screen.findAllByTestId('expense-item')
+  fireEvent.change(input('expense-amount'), { target: { value: '500' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-delete')[0])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
+})
