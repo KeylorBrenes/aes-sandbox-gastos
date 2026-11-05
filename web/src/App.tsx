@@ -12,6 +12,22 @@ function today(): string {
 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+type Loaded = { month: Month | null; categories: Category[] | null }
+
+async function getJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url)
+    return res.ok ? ((await res.json()) as T) : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchAll(): Promise<Loaded> {
+  const [month, categories] = await Promise.all([getJson<Month>('/api/expenses'), getJson<Category[]>('/api/categories')])
+  return { month, categories }
+}
+
 function App() {
   const [categories, setCategories] = useState<Category[]>([])
   const [month, setMonth] = useState<Month | null>(null)
@@ -20,20 +36,19 @@ function App() {
   const [categoryId, setCategoryId] = useState('alimentacion')
   const [note, setNote] = useState('')
   const [errors, setErrors] = useState<Record<string, string[]>>({})
+  const [loadError, setLoadError] = useState(false)
 
-  const loadMonth = useCallback(async () => {
-    const res = await fetch('/api/expenses')
-    if (res.ok) setMonth(await res.json())
+  const applyLoaded = useCallback((r: Loaded) => {
+    if (r.month) setMonth(r.month)
+    if (r.categories) setCategories(r.categories)
+    setLoadError(!r.month || !r.categories)
   }, [])
+
+  const loadAll = useCallback(() => fetchAll().then(applyLoaded), [applyLoaded])
 
   useEffect(() => {
-    fetch('/api/categories')
-      .then((r) => r.json())
-      .then(setCategories)
-    fetch('/api/expenses')
-      .then((r) => r.json())
-      .then(setMonth)
-  }, [])
+    void fetchAll().then(applyLoaded)
+  }, [applyLoaded])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -56,14 +71,22 @@ function App() {
     setAmount('')
     setNote('')
     setDate(today())
-    await loadMonth()
+    await loadAll()
   }
 
   return (
     <main>
       <h1 data-testid="app-title">Control de gastos</h1>
 
-      {month && (
+      {loadError && (
+        <div data-testid="load-error" role="alert">
+          <p>No se pudieron cargar los datos.</p>
+          <button type="button" data-testid="load-retry" onClick={() => void loadAll()}>
+            Reintentar
+          </button>
+        </div>
+      )}
+
       <form data-testid="expense-form" noValidate onSubmit={submit}>
         <label>
           Monto
@@ -95,7 +118,6 @@ function App() {
           Guardar
         </button>
       </form>
-      )}
 
       <p>
         Total del mes:{' '}
