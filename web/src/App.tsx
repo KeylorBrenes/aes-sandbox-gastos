@@ -38,6 +38,7 @@ function App() {
   const [errors, setErrors] = useState<Record<string, string[]>>({})
   const [loadError, setLoadError] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
 
   const applyLoaded = useCallback((r: Loaded) => {
     if (r.month) setMonth(r.month)
@@ -67,6 +68,14 @@ function App() {
     setDate(i.date)
     setCategoryId(i.categoryId)
     setNote(i.note ?? '')
+  }
+
+  async function remove(id: number) {
+    const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
+    if (!res.ok && res.status !== 404) return
+    setConfirmingId(null)
+    if (editingId === id) resetForm()
+    await loadAll()
   }
 
   async function submit(e: React.FormEvent) {
@@ -153,7 +162,21 @@ function App() {
             {i.note ? ` · ${i.note}` : ''}{' '}
             <button type="button" data-testid="expense-edit" onClick={() => startEdit(i)}>
               Editar
+            </button>{' '}
+            <button type="button" data-testid="expense-delete" onClick={() => setConfirmingId(i.id)}>
+              Eliminar
             </button>
+            {confirmingId === i.id && (
+              <span data-testid="delete-confirm">
+                {' '}¿Eliminar este gasto?{' '}
+                <button type="button" data-testid="delete-confirm-yes" onClick={() => void remove(i.id)}>
+                  Confirmar
+                </button>{' '}
+                <button type="button" data-testid="delete-confirm-no" onClick={() => setConfirmingId(null)}>
+                  Cancelar
+                </button>
+              </span>
+            )}
           </li>
         ))}
       </ul>
