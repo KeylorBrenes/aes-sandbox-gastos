@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # AES — SubagentStop. Capa L2.
-# Antes de que programmer o mechanic terminen, ejecuta el guardián AES local y las validaciones.
+# Antes de que un subagente AES termine:
+#   - todos (qa, programmer, mechanic, verifier): no deben dejar servidores escuchando en los
+#     puertos del proyecto (FL-007: contaminan la evidencia del siguiente rol);
+#   - programmer y mechanic: además, guardián AES local y validaciones.
 # Bloquea UNA vez (stop_hook_active evita bucles): si siguen fallando, el agente debe
-# terminar reportando BLOCKED con la causa, y el orquestador lo verá.
+# terminar reportando BLOCKED **para el humano**, y el orquestador lo verá.
 set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 
 aes_read_input
 AES_ROLE=$(aes_role)
-[[ "$AES_ROLE" == "programmer" || "$AES_ROLE" == "mechanic" ]] || exit 0
+case "$AES_ROLE" in qa|programmer|mechanic|verifier) ;; *) exit 0 ;; esac
 [[ "$(aes_get '.stop_hook_active')" == "true" ]] && exit 0
 
 cwd=$(aes_get '.cwd'); [[ -z "$cwd" ]] && cwd=$PWD
@@ -18,6 +21,39 @@ cd "$root" || exit 0
 
 failures=()
 log=$(mktemp)
+
+# 0. Servidores vivos en los puertos del proyecto.
+#    Linux: /proc/net/tcp(6) (no depende de ss/netstat). Windows/macOS: netstat.
+AES_PORTS="${AES_PORTS:-5080 5081 5173}"
+port_listening() {
+  local port="$1" hex
+  if [[ -r /proc/net/tcp ]]; then
+    local files=(/proc/net/tcp)
+    [[ -r /proc/net/tcp6 ]] && files+=(/proc/net/tcp6)
+    hex=$(printf '%04X' "$port")
+    awk -v h=":${hex}" '$4 == "0A" && substr($2, length($2) - 4) == h { found = 1 } END { exit !found }' \
+      "${files[@]}" 2>/dev/null
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ano 2>/dev/null | grep -iE "[:.]${port}[[:space:]].*(LISTENING|ESCUCHANDO|LISTEN)" >/dev/null
+  else
+    return 1
+  fi
+}
+listening=""
+for port in $AES_PORTS; do
+  port_listening "$port" && listening+=" $port"
+done
+if [[ -n "$listening" ]]; then
+  failures+=("quedan servidores escuchando en los puertos:$listening. Usa .claude/scripts/with-servers.sh, que los detiene solo; si no puedes detenerlos, reporta BLOCKED para el humano (no le pidas a otro agente que lo haga)")
+fi
+
+if [[ "$AES_ROLE" == "qa" || "$AES_ROLE" == "verifier" ]]; then
+  if (( ${#failures[@]} > 0 )); then
+    printf 'AES [%s]: no puedes terminar todavía. %s\n' "$AES_ROLE" "${failures[*]}" >&2
+    rm -f "$log"; exit 2
+  fi
+  rm -f "$log"; exit 0
+fi
 
 # 1. Guardián AES local (mismas reglas que la CI) contra origin/main.
 #    Las dependencias no se juzgan aquí: su aprobación es humana y vive en la CI

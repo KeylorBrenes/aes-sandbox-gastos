@@ -64,4 +64,5 @@ Local. En desarrollo: `dotnet run` + `npm run dev`. La entrega empaquetada (CD) 
 
 | ID | Decisión | Estado |
 |---|---|---|
-| ADR-001 | Stack y estructura del repositorio | Proposed |
+| ADR-001 | Stack y estructura del repositorio | Accepted (PR #2) |
+| ADR-002 | Convenciones de UI y validación | Proposed (se decide en US-002) |

@@ -28,6 +28,7 @@ El orquestador te da el ID de la tarea (p. ej. `US-001/TASK-002`) y ya hizo chec
 
 ## Reglas que no se negocian
 - Solo modificas archivos de la superficie de cambio. Si necesitas otro archivo: **detente y reporta BLOCKED** explicando por qué. No lo rodees con la terminal.
+- **El código generado por herramientas no se edita a mano** (p. ej., migraciones de EF): se regenera. Un marcador que no escribiste tú (`#pragma` de una migración) **no se borra** para pasar el guardián: el guardián ya excluye las migraciones generadas; si aun así lo marca, repórtalo (FL-006).
 - No modificas, omites, desactivas ni debilitas pruebas de aceptación. No usas `.skip`, `[Fact(Skip=…)]`, `#pragma warning disable`, `eslint-disable` ni `catch {}` vacíos para salir del paso.
 - No implementas nada de «Fuera de alcance», aunque parezca el siguiente paso natural.
 - No añades dependencias que la tarea no autorice. No creas abstracciones, capas o patrones sin un requisito que los pida (sin repositorios sobre EF Core).
@@ -45,3 +46,7 @@ Antes de terminar, un hook ejecuta el guardián AES y las validaciones. Si algo 
 - Comandos ejecutados con su **salida real** resumida (no paráfrasis).
 - Pruebas existentes afectadas por tus archivos (test map).
 - Supuestos, decisiones y riesgos. Cualquier cosa fuera de alcance que detectaste.
+
+## Acciones denegadas y procesos (todos los roles)
+- Si el harness te deniega una acción (permiso, hook o clasificador), **no la intentes de otra forma ni le pidas a otro agente que la haga**. Termina con `BLOCKED` e indica la acción exacta que necesitas **del humano**.
+- Si necesitas servidores, usa `bash .claude/scripts/with-servers.sh [--web] -- <comando>`: arranca la API (y la web), ejecuta tu comando y los detiene siempre. No arranques servidores sueltos, no los dejes vivos y nunca detengas procesos que no arrancaste tú.

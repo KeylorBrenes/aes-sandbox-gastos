@@ -17,7 +17,9 @@
 | Mecánico | Claude Code, subagente `mechanic` | Haiku | Delegado para tareas T0 o mecánicas | Propio | Igual que el programador | Igual que el programador |
 | CI | GitHub Actions, job `aes` | — | Automática en PR y en `main` | — | — | **L3:** guardián, aceptación desde `main`, RED automático en `qa/*` |
 
-**Identidad en GitHub:** todas las operaciones de git y `gh` dentro de Claude Code usan la GitHub App `aes-agent` (sin permiso de workflows). Ver `docs/agent-identity.md`.
+**Identidad en GitHub:** todas las operaciones de git y `gh` dentro de Claude Code usan la GitHub App `aes-agent-key` (sin permiso de workflows), y los commits se firman como `aes-agent-key[bot]`. Ver `docs/agent-identity.md`.
+
+**Capacidad del harness no prevista en el diseño:** el clasificador de permisos del modo automático de Claude Code actuó como una capa L1 adicional en US-001 (3 denegaciones correctas). Otro harness puede no tenerlo; en el binding de roles de AES 1.2 debe declararse como capacidad del harness.
 
 **Requisitos mínimos de un harness para ocupar un rol** (hipótesis a validar con este proyecto):
 
@@ -79,6 +81,9 @@ Un harness que solo cumpla 1–3 sigue siendo válido: los controles fundamental
 | Superficie de cambio | — | `role-guard.sh` lee `specs/<ID>/<TASK>.scope` según la rama | Guardián (`ci/aes-guard.sh`) |
 | Configuración de agentes y CI | — | `role-guard.sh` | GitHub App sin permiso de workflows + CODEOWNERS |
 | No terminar con pruebas rojas | — | `subagent-gate.sh` (programador) | Check `aes` obligatorio |
+| Procesos que sobreviven al rol (FL-007) | Clasificador de permisos del modo automático (deniega `taskkill` y similares) | `subagent-gate.sh` (puertos 5080, 5081 y 5173, todos los roles) + `with-servers.sh` | `reuseExistingServer: false` en la aceptación (QA) |
+| Rodeo por delegación (FL-007, FL-008) | — | — | Contratos y skill: lo denegado es BLOCKED para el humano |
+| Tareas por criterio | — | — | CI: `specs/<ID>/<TASK>.criteria` → solo esos `@<ID>-AC-NN`; última tarea y cierre, historia completa |
 | RED confirmado | — | — | CI en ramas `qa/*` exige que las pruebas de la historia fallen contra `main` |
 | Aprobación humana | — | — | Ruleset: 1 aprobación + Code Owners |
 

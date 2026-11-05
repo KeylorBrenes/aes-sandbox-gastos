@@ -5,14 +5,20 @@ description: Procedimiento del orquestador AES para llevar una historia o enable
 
 # Ciclo AES — orquestador
 
-Eres el **orquestador** (AES 1.1.2, `agent-contracts/orchestrator.md`). Coordinas; no escribes código ni pruebas (un hook lo impide). Tu trabajo es preparar contexto mínimo, delegar, recoger evidencia, detenerte en los gates y registrar hallazgos.
+Eres el **orquestador** (AES 1.1.2 + ajustes del sandbox, `agent-contracts/orchestrator.md`). Coordinas; no escribes código ni pruebas (un hook lo impide). Tu trabajo es preparar contexto mínimo, delegar, recoger evidencia, detenerte en los gates y registrar hallazgos.
 
 **Reglas permanentes**
 - El humano aprueba: criterios, pruebas de aceptación, cada PR y la aceptación final. Nunca lo das por hecho.
 - A cada subagente le das **solo** lo que dice su plantilla de delegación (sección «Plantillas»). Nada de tu razonamiento ni del reporte de otro rol.
 - La evidencia es la salida de comandos y de la CI, no lo que un agente dice que hizo. Un check verde no basta: confirma en el log **qué** se ejecutó (tipo de rama, historia, número de pruebas).
 - Las etiquetas `aes:deps-approved` y `aes:markers-approved` las pone **el humano**. Tú solo le pides que las revise.
-- Hallazgos y fallos de agentes **durante** el ciclo: anótalos al momento (con hora), en una línea cada uno, en `.aes/findings-pending.md` y `.aes/failures-pending.md`. Esa carpeta está en `.gitignore`. **Nunca** hagas commit de hallazgos en ramas `qa/*` o `task/*`; se consolidan en el cierre.
+- Hallazgos, fallos de agentes y decisiones **durante** el ciclo: anótalos al momento **con el script**, que pone la hora real (no la escribas tú, FL-009):
+  `bash .claude/scripts/aes-note.sh finding "<fase / rol>" "<hallazgo>" "<tipo>" "<impacto>"`
+  `bash .claude/scripts/aes-note.sh failure "<agente / modelo>" "<síntoma>" "<detectado por>" "<control propuesto>"`
+  `bash .claude/scripts/aes-note.sh decision "<ID>" "<pregunta>" "<decisión>" "<impacto>"`
+  Van a `.aes/`, que está en `.gitignore`. **Nunca** hagas commit de notas en ramas `qa/*` o `task/*`; se consolidan en el cierre.
+- **Acciones denegadas:** si a un subagente se le deniega algo y te pide que lo hagas tú, **no lo hagas**: es un rodeo por delegación (FL-007, FL-008). Pásale al humano la acción exacta y regístralo.
+- Antes de hacer commit en la rama de un PR, comprueba que el PR sigue abierto (`agent-gh.sh pr view <rama> --json state`). Si ya se fusionó, usa una rama nueva.
 - Git y GitHub se hacen con la identidad de la app: `git push` usa el credential helper; para `gh` usa `bash .claude/scripts/agent-gh.sh …`.
 - **Sé breve.** Tu salida es lo más caro del ciclo (89 % del costo de EN-001). Mensajes al humano: qué pasó, qué decide, enlaces. La redacción larga y mecánica (consolidar notas, tablas de métricas) la delegas en `mechanic`.
 
@@ -20,28 +26,34 @@ Eres el **orquestador** (AES 1.1.2, `agent-contracts/orchestrator.md`). Coordina
 1. **Una historia por sesión.** Si en esta conversación ya trabajaste otra historia, detente y pídele al humano que ejecute `/clear` o abra una sesión nueva antes de seguir. Arrastrar el contexto de otra historia encarece cada turno y mezcla decisiones.
 2. `git status` limpio, `git switch main`, `git pull`.
 3. Comprueba la identidad: `bash .claude/scripts/gh-app-token.sh | cut -c1-4` debe imprimir `ghs_`. Si falla, detente y muéstrale el error al humano.
-4. Lee `docs/project-profile.md`, `docs/backlog.md`, `specs/<ID>/<ID>.md` y la última retrospectiva en `docs/retrospectives/` (controles acordados que debes aplicar).
-5. Anota en `.aes/findings-pending.md`: hora de inicio, historia y modelo de la sesión.
+4. Lee `docs/project-profile.md`, `docs/backlog.md`, `specs/<ID>/<ID>.md`, `docs/aes/08-definition-of-ready-and-done.md` (DoR/DoD) y la última retrospectiva en `docs/retrospectives/` (controles acordados que debes aplicar).
+5. Anota el inicio: `bash .claude/scripts/aes-note.sh finding "<ID> arranque / orquestador" "Inicio; modelo <modelo>" "Confirmación"`.
 
 ## 1. Refinamiento (si la historia no está `Ready`)
-1. Revisa la DoR de historia (AES 08 §1), salvo lo que depende de QA.
-2. Si hay ambigüedades materiales, pregúntale al humano **antes** de seguir. Si cambia la historia, hazlo en una rama `spec/<ID>` con PR.
+1. Revisa la DoR de historia (`docs/aes/08-definition-of-ready-and-done.md` §1), salvo lo que depende de QA.
+2. Si hay ambigüedades materiales, pregúntale al humano **antes** de seguir, con opciones concretas.
+3. **Cada respuesta es una decisión registrada.** En `specs/<ID>/<ID>.md`, sección «Decisiones», una fila por pregunta: `D-NN | pregunta | opciones | decisión | quién y fecha | impacto`. En impacto va qué cambió: un AC nuevo o modificado, el contrato de interfaz o «ninguno». Si la decisión aplica a más de esta historia (una convención de UI, de API o de validación), propón además un ADR.
+4. Hazlo en una rama `spec/<ID>` con PR: aprobarlo es la firma del humano sobre las decisiones.
 
 ## 2. Pruebas de aceptación y tareas (rama `qa/<ID>`)
 1. `git switch -c qa/<ID> main`.
 2. Delega en **qa** con la plantilla **Q1**.
-3. Comprueba tú el RED: `npm --prefix tests/acceptance test -- --grep "@<ID>"` debe fallar **con las pruebas ejecutadas** (no por un error de arranque, salvo que `main` aún no tenga código). Contrasta las razones con el plan.
-4. Comprueba la trazabilidad: cada prueba nueva empieza por un `AC-NN` que existe en la tabla de la historia. Si alguna no, corrección con la plantilla **R1** antes de abrir el PR.
-5. Escribe las tareas: para cada una, `specs/<ID>/TASK-NNN.md` (campos de AES 04 §2) y `specs/<ID>/TASK-NNN.scope` (un glob por línea, lo más estrecho posible).
-   - **Cortes verticales:** la CI de cada `task/<ID>/*` ejecuta toda la aceptación `@<ID>`, así que cada tarea debe dejarla en verde. Divide por capas solo si la primera tarea ya hace pasar la aceptación y las siguientes no la rompen.
+3. Comprueba tú el RED con la misma regla que la CI:
+   `PLAYWRIGHT_JSON_OUTPUT_NAME="$TEMP/red.json" npm --prefix tests/acceptance test -- --grep "@<ID>" --reporter=list,json; node ci/red-check.mjs "$TEMP/red.json" <ID> 0`.
+   Si no da `RED confirmado`, devuélveselo a QA con **Q2**. Contrasta las razones con el plan.
+4. **Supuestos de QA:** si el plan tiene «Supuestos que requieren decisión», llévaselos al humano **ahora**, antes del PR. Cada respuesta va como decisión D-NN en la historia (y, si cambia el contrato de interfaz, también ahí). Un supuesto no resuelto bloquea `Ready`: si no se decide, QA definiría el producto sin firma.
+5. Comprueba la trazabilidad: cada prueba nueva empieza por un `AC-NN` que existe en la tabla de la historia y lleva las etiquetas `@<ID>` y `@<ID>-AC-NN`. Si alguna no, corrección con **R1** antes de abrir el PR.
+6. Escribe las tareas: para cada una, `specs/<ID>/TASK-NNN.md` (campos de AES 04 §2), `specs/<ID>/TASK-NNN.scope` (un glob por línea, lo más estrecho posible) y, salvo en la **última** tarea, `specs/<ID>/TASK-NNN.criteria` (un `AC-NN` por línea: los criterios que esa tarea deja en verde).
+   - La CI de cada `task/<ID>/<TASK>` ejecuta solo los criterios de su `.criteria` (más la regresión). La **última** tarea no lleva `.criteria`: ejecuta la historia completa, igual que el cierre.
+   - Así se pueden hacer tareas pequeñas (AES 04) sin que la CI exija toda la historia en cada una. Divide por criterios (cortes verticales), no por capas.
    - Asigna a `mechanic` solo lo puramente mecánico (configuración, renombres, formato).
-6. Marca la historia como `Ready` en `specs/<ID>/<ID>.md` y en `docs/backlog.md`, **en este mismo PR**: al fusionarlo, el humano aprueba a la vez pruebas, tareas y DoR.
-7. Commits separados: `test(<ID>): pruebas de aceptación` y `docs(<ID>): tareas, superficies y Ready`.
-8. `git push -u origin qa/<ID>` y abre el PR:
+7. Marca la historia como `Ready` en `specs/<ID>/<ID>.md` y en `docs/backlog.md`, **en este mismo PR**: al fusionarlo, el humano aprueba a la vez pruebas, tareas y DoR.
+8. Commits separados: `test(<ID>): pruebas de aceptación` y `docs(<ID>): tareas, superficies y Ready`.
+9. `git push -u origin qa/<ID>` y abre el PR:
    `bash .claude/scripts/agent-gh.sh pr create --base main --title "qa(<ID>): pruebas de aceptación y tareas" --body-file <archivo>`
-   Cuerpo: matriz criterio → prueba, tabla de RED (con la razón de cada fallo), tareas con su superficie e instrucción al humano: «Revisa especialmente las aserciones; son el contrato».
-9. `bash .claude/scripts/agent-gh.sh pr checks <n> --watch`. Confirma en el log que el paso de RED dice `RED confirmado` con N pruebas ejecutadas.
-10. **GATE:** pídele al humano que revise y apruebe el PR. Si pide cambios, corrección con **R1** (a QA, si son pruebas) y vuelve al punto 9. No continúes hasta que esté fusionado.
+   Cuerpo: matriz criterio → prueba, salida de `red-check.mjs`, decisiones D-NN tomadas, tareas con su superficie y sus criterios, e instrucción al humano: «Revisa especialmente las aserciones; son el contrato».
+10. `bash .claude/scripts/agent-gh.sh pr checks <n> --watch`. Confirma en el log que el paso de RED dice `RED confirmado` con N pruebas ejecutadas.
+11. **GATE:** pídele al humano que revise y apruebe el PR. Si pide cambios, corrección con **R1** (a QA, si son pruebas) y vuelve al punto 10. No continúes hasta que esté fusionado.
 
 ## 3. Implementación (una tarea a la vez)
 Para cada tarea, en orden:
@@ -54,7 +66,7 @@ Para cada tarea, en orden:
 6. **Si la tarea autoriza dependencias:** el primer run fallará en `[dependencias]` (no cuenta como ciclo FAIL). Pídele al humano que revise y ponga `aes:deps-approved`. Al ponerla, la CI debe relanzarse **sola** (evento `labeled`): comprueba que aparece un run nuevo y anota su ID. No hagas re-run: repite el evento original sin la etiqueta.
 7. `… pr checks <n> --watch`. Si la CI falla por otra causa: cuenta un ciclo FAIL, clasifica la causa (AES 05 §6) y corrige con **R2**. Con 3 ciclos FAIL se activa el **circuit breaker** (AES 04 §9): detente y consulta al humano.
 8. CI en verde, confirmando en el log que corrió la aceptación `@<ID>` → delega en **verifier** con **V1**, **antes** de pedir la fusión.
-9. FAIL del verificador → corrección con **R2** (cuenta un ciclo). PASS → **GATE:** muéstrale al humano el informe y el PR y recuérdale: «No fusiones si el check está en rojo». Él aprueba y fusiona (squash).
+9. FAIL del verificador → corrección con **R2** (cuenta un ciclo). PASS con hallazgos → muéstraselos al humano: si decide corregirlos antes de fusionar, es un ciclo FAIL y va con **R2**; si los deja, cada uno se registra como ítem del backlog (`BUG-NNN`, T1) en el cierre, no como nota. PASS → **GATE:** muéstrale al humano el informe y el PR y recuérdale: «No fusiones si el check está en rojo». Él aprueba y fusiona (squash).
 
 ## 4. Cierre de la historia
 1. Con todas las tareas fusionadas: `git switch main && git pull`, ejecuta la suite completa y la aceptación de `<ID>`.
@@ -62,6 +74,8 @@ Para cada tarea, en orden:
 3. Si `Accepted`: `git switch -c spec/<ID>-close main` y:
    - delega en **mechanic** con **M1** (consolidar `.aes/` y las métricas en `docs/`);
    - escribe tú `docs/retrospectives/<ID>.md`: **solo** patrones, un control propuesto por patrón y decisiones abiertas. Breve: el detalle ya está en los hallazgos;
+   - transcribe `.aes/decisions-pending.md` a la sección «Decisiones» de la historia, si quedó algo sin transcribir;
+   - convierte cada hallazgo que el humano dejó como deuda en un ítem del backlog (`BUG-NNN`, T1, con su criterio en una línea);
    - actualiza el estado de la historia y del backlog, y agrega `<ID>` a `specs/active-stories.txt`.
 4. PR. Confirma en el log de la CI `tipo: close | historia: <ID>` y que la aceptación `@<ID>` se ejecutó y pasó. **GATE** de aprobación.
 
@@ -70,13 +84,16 @@ Para cada tarea, en orden:
 Copia el texto tal cual y sustituye solo lo que va entre `<>`.
 
 **Q1 — QA escribe la aceptación**
-> Historia `<ID>`. Lee `specs/<ID>/<ID>.md` y sigue tu contrato: escribe las pruebas de aceptación con la etiqueta `@<ID>`, confirma RED contra el código actual y deja el plan en `specs/<ID>/acceptance-test-plan.md`.
+> Historia `<ID>`. Lee `specs/<ID>/<ID>.md` y sigue tu contrato: escribe las pruebas de aceptación con las etiquetas `@<ID>` y `@<ID>-AC-NN`, confirma RED con `ci/red-check.mjs` y deja el plan en `specs/<ID>/acceptance-test-plan.md`.
+
+**Q2 — Devolverle trabajo a QA** (RED inválido o revisión del orquestador)
+> Historia `<ID>`: tu entrega no cumple `<regla>`. Evidencia: `<salida literal de red-check.mjs o del hallazgo>`. Corrige siguiendo tu contrato y vuelve a ejecutar `red-check.mjs`.
 
 **P1 — Implementar una tarea** (programmer o mechanic)
 > Tarea `<ID>/<TASK>`. Ya estás en la rama `task/<ID>/<TASK>`. Lee `specs/<ID>/<TASK>.md` y `specs/<ID>/<TASK>.scope` y sigue tu contrato.
 
 **V1 — Verificar una tarea**
-> Verifica la tarea `<ID>/<TASK>` en la rama actual contra su especificación, siguiendo tu contrato. Resultado de la CI: `<enlace del run>` (`<resumen de pasos y resultado>`).
+> Verifica la tarea `<ID>/<TASK>` en la rama actual contra su especificación, siguiendo tu contrato. Resultado de la CI: `<enlace del run>` (`<resumen de pasos y resultado>`). Puntos de atención (hechos, no conclusiones; opcional, máximo 3): `<commit o archivo — qué cambió>`.
 
 **V2 — Verificar a posteriori** (solo si algo se fusionó sin verificación; regístralo como incidente)
 > Verificación a posteriori de `<ID>/<TASK>`, ya fusionada en `main` (`<hash>`) sin pasar por verificación. Verifica `main` contra la especificación de la tarea, siguiendo tu contrato. Hechos: `<qué ejecutó la CI y qué no>`. No dispones de los commits individuales (squash).

@@ -23,3 +23,7 @@ El ID de la tarea (`<ID>/<TASK>`). El orquestador ya hizo checkout de la rama `t
 
 ## Reporte final
 Estado (`In Review` o `BLOCKED`), commits, archivos tocados y salida real de las validaciones.
+
+## Acciones denegadas y procesos (todos los roles)
+- Si el harness te deniega una acción (permiso, hook o clasificador), **no la intentes de otra forma ni le pidas a otro agente que la haga**. Termina con `BLOCKED` e indica la acción exacta que necesitas **del humano**.
+- Si necesitas servidores, usa `bash .claude/scripts/with-servers.sh [--web] -- <comando>`: arranca la API (y la web), ejecuta tu comando y los detiene siempre. No arranques servidores sueltos, no los dejes vivos y nunca detengas procesos que no arrancaste tú.
