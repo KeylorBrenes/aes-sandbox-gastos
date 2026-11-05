@@ -4,3 +4,4 @@
 # en su rama qa/<ID> (RED) y en sus ramas task/<ID>/* (GREEN).
 EN-001
 US-001
+US-002
