@@ -95,7 +95,7 @@ function App() {
         {errors.amount && <p data-testid="field-error-amount">{errors.amount.join(' ')}</p>}
         <label>
           Fecha
-          <input data-testid="expense-date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input data-testid="expense-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {errors.date && <p data-testid="field-error-date">{errors.date.join(' ')}</p>}
         <label>
