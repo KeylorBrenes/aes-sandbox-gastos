@@ -37,6 +37,7 @@ function App() {
   const [note, setNote] = useState('')
   const [errors, setErrors] = useState<Record<string, string[]>>({})
   const [loadError, setLoadError] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   const applyLoaded = useCallback((r: Loaded) => {
     if (r.month) setMonth(r.month)
@@ -50,10 +51,28 @@ function App() {
     void fetchAll().then(applyLoaded)
   }, [applyLoaded])
 
+  function resetForm() {
+    setEditingId(null)
+    setErrors({})
+    setAmount('')
+    setNote('')
+    setDate(today())
+    setCategoryId('alimentacion')
+  }
+
+  function startEdit(i: Expense) {
+    setEditingId(i.id)
+    setErrors({})
+    setAmount(String(i.amount))
+    setDate(i.date)
+    setCategoryId(i.categoryId)
+    setNote(i.note ?? '')
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const res = await fetch('/api/expenses', {
-      method: 'POST',
+    const res = await fetch(editingId === null ? '/api/expenses' : `/api/expenses/${editingId}`, {
+      method: editingId === null ? 'POST' : 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: amount === '' ? null : Number(amount),
@@ -67,10 +86,7 @@ function App() {
       return
     }
     if (!res.ok) return
-    setErrors({})
-    setAmount('')
-    setNote('')
-    setDate(today())
+    resetForm()
     await loadAll()
   }
 
@@ -87,7 +103,7 @@ function App() {
         </div>
       )}
 
-      <form data-testid="expense-form" noValidate onSubmit={submit}>
+      <form data-testid="expense-form" data-mode={editingId === null ? 'create' : 'edit'} noValidate onSubmit={submit}>
         <label>
           Monto
           <input data-testid="expense-amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -115,8 +131,13 @@ function App() {
         </label>
         {errors.note && <p data-testid="field-error-note">{errors.note.join(' ')}</p>}
         <button type="submit" data-testid="expense-submit">
-          Guardar
+          {editingId === null ? 'Guardar' : 'Guardar cambios'}
         </button>
+        {editingId !== null && (
+          <button type="button" data-testid="edit-cancel" onClick={resetForm}>
+            Cancelar
+          </button>
+        )}
       </form>
 
       <p>
@@ -127,9 +148,12 @@ function App() {
       </p>
       <ul data-testid="expense-list">
         {month?.items.map((i) => (
-          <li key={i.id} data-testid="expense-item" data-amount={i.amount}>
+          <li key={i.id} data-testid="expense-item" data-id={i.id} data-amount={i.amount}>
             {i.date} · {categories.find((c) => c.id === i.categoryId)?.name ?? i.categoryId} · {money(i.amount)}
-            {i.note ? ` · ${i.note}` : ''}
+            {i.note ? ` · ${i.note}` : ''}{' '}
+            <button type="button" data-testid="expense-edit" onClick={() => startEdit(i)}>
+              Editar
+            </button>
           </li>
         ))}
       </ul>
