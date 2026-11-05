@@ -29,7 +29,7 @@ Saber en segundos en qué se va el dinero cada mes y si se está dentro del pres
 | BUG-001 | Bug | EPIC-01 | Una nota con solo espacios se guarda tal cual en vez de `null` | T1 | 1 | P2 | Draft |
 | BUG-002 | Bug | EPIC-01 | Si la carga inicial de la lista falla, la web no muestra el formulario ni un error | T1 | 2 | P1 | Draft |
 | BUG-003 | Bug | EPIC-01 | El mensaje de error del monto usa U+00A0 (espacio duro) como separador de miles | T1 | 1 | P3 | Draft |
-| CH-001 | Chore | EPIC-00 | `nuget.config` versionado con `nuget.org` y *package source mapping* | T1 | 1 | P1 | Draft |
+| CH-001 | Chore | EPIC-00 | `nuget.config` versionado con `nuget.org` y *package source mapping* | T1 | 1 | P1 | Ready |
 
 Orden propuesto: CH-001 → US-002 (incluye BUG-001 a BUG-003 si el refinamiento lo decide) → US-003 → US-004.
 
