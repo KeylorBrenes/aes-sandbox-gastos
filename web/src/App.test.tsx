@@ -59,3 +59,39 @@ test('un 400 muestra el error junto al campo y no agrega nada', async () => {
   expect((await screen.findByTestId('field-error-amount')).textContent).toBe('El monto debe ser mayor a 0.')
   expect(screen.queryAllByTestId('expense-item')).toHaveLength(0)
 })
+
+test('si la lista falla se muestra load-error con el formulario y al reintentar se carga', async () => {
+  let failing = true
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/categories') return Response.json(categories)
+      if (failing) return new Response(null, { status: 500 })
+      return Response.json({ month: '2026-11', items: [], total: 0 })
+    }),
+  )
+  render(<App />)
+
+  expect(await screen.findByTestId('load-error')).toBeTruthy()
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+
+  failing = false
+  fireEvent.click(screen.getByTestId('load-retry'))
+  await waitFor(() => expect(screen.queryByTestId('load-error')).toBeNull())
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+})
+
+test('si las categorías fallan por red se muestra load-error y el formulario', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/categories') throw new TypeError('network')
+      return Response.json({ month: '2026-11', items: [], total: 0 })
+    }),
+  )
+  render(<App />)
+
+  expect(await screen.findByTestId('load-error')).toBeTruthy()
+  expect(screen.getByTestId('load-retry')).toBeTruthy()
+  expect(screen.getByTestId('expense-form')).toBeTruthy()
+})
