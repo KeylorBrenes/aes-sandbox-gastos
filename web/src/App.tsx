@@ -37,6 +37,7 @@ function App() {
   const [note, setNote] = useState('')
   const [errors, setErrors] = useState<Record<string, string[]>>({})
   const [loadError, setLoadError] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmingId, setConfirmingId] = useState<number | null>(null)
 
@@ -55,6 +56,7 @@ function App() {
   function resetForm() {
     setEditingId(null)
     setErrors({})
+    setActionError(null)
     setAmount('')
     setNote('')
     setDate(today())
@@ -70,9 +72,24 @@ function App() {
     setNote(i.note ?? '')
   }
 
+  function cancelDelete() {
+    setActionError(null)
+    setConfirmingId(null)
+  }
+
   async function remove(id: number) {
-    const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
-    if (!res.ok && res.status !== 404) return
+    let res: Response
+    try {
+      res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
+    } catch {
+      setActionError('No se pudo eliminar el gasto. Revisa tu conexión e inténtalo de nuevo.')
+      return
+    }
+    if (!res.ok && res.status !== 404) {
+      setActionError('No se pudo eliminar el gasto. Inténtalo de nuevo.')
+      return
+    }
+    setActionError(null)
     setConfirmingId(null)
     if (editingId === id) resetForm()
     await loadAll()
@@ -80,21 +97,31 @@ function App() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const res = await fetch(editingId === null ? '/api/expenses' : `/api/expenses/${editingId}`, {
-      method: editingId === null ? 'POST' : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount: amount === '' ? null : Number(amount),
-        date,
-        categoryId,
-        note,
-      }),
-    })
+    let res: Response
+    try {
+      res = await fetch(editingId === null ? '/api/expenses' : `/api/expenses/${editingId}`, {
+        method: editingId === null ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amount === '' ? null : Number(amount),
+          date,
+          categoryId,
+          note,
+        }),
+      })
+    } catch {
+      setActionError('No se pudo guardar el gasto. Revisa tu conexión e inténtalo de nuevo.')
+      return
+    }
     if (res.status === 400) {
+      setActionError(null)
       setErrors((await res.json()).errors ?? {})
       return
     }
-    if (!res.ok) return
+    if (!res.ok) {
+      setActionError('No se pudo guardar el gasto. Inténtalo de nuevo.')
+      return
+    }
     resetForm()
     await loadAll()
   }
@@ -149,6 +176,12 @@ function App() {
         )}
       </form>
 
+      {actionError && (
+        <p data-testid="action-error" role="alert">
+          {actionError}
+        </p>
+      )}
+
       <p>
         Total del mes:{' '}
         <strong data-testid="month-total" data-amount={month?.total ?? 0}>
@@ -172,7 +205,7 @@ function App() {
                 <button type="button" data-testid="delete-confirm-yes" onClick={() => void remove(i.id)}>
                   Confirmar
                 </button>{' '}
-                <button type="button" data-testid="delete-confirm-no" onClick={() => setConfirmingId(null)}>
+                <button type="button" data-testid="delete-confirm-no" onClick={cancelDelete}>
                   Cancelar
                 </button>
               </span>
