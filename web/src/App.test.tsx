@@ -217,8 +217,8 @@ test('Confirmar hace DELETE, quita el gasto y actualiza el total', async () => {
 
 type Handler = (url: string, init?: RequestInit) => Promise<Response> | Response
 
-function mockWith(handler: Handler) {
-  const items: Item[] = [{ id: 7, amount: 1250.5, date: '2026-11-02', categoryId: 'otros', note: 'Super' }]
+function mockWith(handler: Handler, extra: Item[] = []) {
+  const items: Item[] = [{ id: 7, amount: 1250.5, date: '2026-11-02', categoryId: 'otros', note: 'Super' }, ...extra]
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -317,4 +317,47 @@ test('un 500 al guardar muestra action-error y desaparece al guardar con éxito'
   fireEvent.click(screen.getByTestId('expense-submit'))
   await waitFor(() => expect(screen.queryByTestId('action-error')).toBeNull())
   expect(input('expense-amount').value).toBe('')
+})
+
+const second: Item = { id: 8, amount: 300, date: '2026-11-03', categoryId: 'otros', note: 'Taxi' }
+
+test('un error de DELETE desaparece al pulsar Editar en otro gasto', async () => {
+  mockWith(() => new Response(null, { status: 500 }), [second])
+  render(<App />)
+  const deletes = await screen.findAllByTestId('expense-delete')
+  fireEvent.click(deletes[0])
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-edit')[1])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+})
+
+test('un error de DELETE desaparece al abrir la confirmación de otro gasto', async () => {
+  mockWith(() => new Response(null, { status: 500 }), [second])
+  render(<App />)
+  const deletes = await screen.findAllByTestId('expense-delete')
+  fireEvent.click(deletes[0])
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-delete')[1])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
+  expect(screen.getAllByTestId('delete-confirm')).toHaveLength(1)
+})
+
+test('un error de guardado desaparece al pulsar Eliminar en un gasto', async () => {
+  mockWith(() => Promise.reject(new TypeError('network')), [second])
+  render(<App />)
+  await screen.findAllByTestId('expense-item')
+  fireEvent.change(input('expense-amount'), { target: { value: '500' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+  await screen.findByTestId('action-error')
+
+  fireEvent.click(screen.getAllByTestId('expense-delete')[0])
+
+  expect(screen.queryByTestId('action-error')).toBeNull()
 })
