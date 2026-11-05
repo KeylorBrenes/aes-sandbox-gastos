@@ -1,6 +1,6 @@
 # ADR-002: Convenciones de UI y validación
 
-- **Estado:** Proposed. **No se acepta al fusionar el ajuste del harness 3**: se acepta (o se ajusta) en el refinamiento de US-002, como decisión D-NN de esa historia.
+- **Estado:** Accepted (2026-11-05, decisión D-01 de US-002, con un ajuste en la fila «Fechas»; ver abajo).
 - **Fecha:** 2026-11-04
 - **Responsable:** Orquestador / arquitecto
 - **Aprobador:** Responsable humano del producto
@@ -14,7 +14,9 @@ En US-001 se tomaron decisiones de UI que no son de esa historia, sino de todos 
 
 Sin un registro común, cada historia vuelve a preguntar lo mismo, o peor, el primer agente que escribe una prueba lo decide.
 
-## Decisión (propuesta)
+## Decisión
+
+> Ajuste aceptado el 2026-11-05 (D-01 y D-02 de US-002): el campo de fecha de US-001 era un input de texto, no `type="date"` como asumía el borrador. US-002 lo migra; la regresión de US-001 lo cubre porque `fill('YYYY-MM-DD')` funciona igual.
 
 | Tema | Convención |
 |---|---|
