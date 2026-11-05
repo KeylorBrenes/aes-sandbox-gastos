@@ -41,6 +41,9 @@ public static class ExpenseValidation
         return errors;
     }
 
+    /// Normaliza la nota a guardar: sin texto -> null; con texto se conserva tal cual.
+    public static string? NormalizeNote(string? note) => string.IsNullOrWhiteSpace(note) ? null : note;
+
     public static bool TryParseMonth(string? month, out DateOnly first) =>
         DateOnly.TryParseExact(month is { Length: 7 } ? month + "-01" : "", "yyyy-MM-dd",
             CultureInfo.InvariantCulture, DateTimeStyles.None, out first);
