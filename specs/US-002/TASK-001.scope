@@ -1,0 +1,4 @@
+# Superficie de US-002/TASK-001. Un glob por línea ("*" incluye subcarpetas).
+src/Gastos.Api/Expense*.cs
+src/Gastos.Api/Program.cs
+tests/Gastos.Api.Tests/*.cs

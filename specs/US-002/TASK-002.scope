@@ -1,0 +1,2 @@
+# Superficie de US-002/TASK-002. Un glob por línea ("*" incluye subcarpetas).
+web/src/*
