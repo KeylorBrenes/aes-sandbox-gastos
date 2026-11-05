@@ -187,3 +187,30 @@ test('un 400 al editar muestra el error y mantiene el modo edición', async () =
   expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
   expect(screen.getByTestId('expense-item').getAttribute('data-amount')).toBe('1250.5')
 })
+
+test('Eliminar abre la confirmación dentro del ítem sin borrar y Cancelar la cierra', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+
+  expect(screen.getByTestId('delete-confirm')).toBeTruthy()
+  expect(screen.getByTestId('expense-item').contains(screen.getByTestId('delete-confirm'))).toBe(true)
+  expect(screen.getAllByTestId('expense-item')).toHaveLength(1)
+
+  fireEvent.click(screen.getByTestId('delete-confirm-no'))
+
+  expect(screen.queryByTestId('delete-confirm')).toBeNull()
+  expect(screen.getAllByTestId('expense-item')).toHaveLength(1)
+  expect(calls).toHaveLength(0)
+})
+
+test('Confirmar hace DELETE, quita el gasto y actualiza el total', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-delete'))
+  fireEvent.click(screen.getByTestId('delete-confirm-yes'))
+
+  await waitFor(() => expect(screen.queryAllByTestId('expense-item')).toHaveLength(0))
+  expect(calls).toEqual([{ method: 'DELETE', url: '/api/expenses/7', body: undefined }])
+  expect(screen.getByTestId('month-total').getAttribute('data-amount')).toBe('0')
+})
