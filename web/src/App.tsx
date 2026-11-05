@@ -66,10 +66,16 @@ function App() {
   function startEdit(i: Expense) {
     setEditingId(i.id)
     setErrors({})
+    setActionError(null)
     setAmount(String(i.amount))
     setDate(i.date)
     setCategoryId(i.categoryId)
     setNote(i.note ?? '')
+  }
+
+  function askDelete(id: number) {
+    setActionError(null)
+    setConfirmingId(id)
   }
 
   function cancelDelete() {
@@ -196,7 +202,7 @@ function App() {
             <button type="button" data-testid="expense-edit" onClick={() => startEdit(i)}>
               Editar
             </button>{' '}
-            <button type="button" data-testid="expense-delete" onClick={() => setConfirmingId(i.id)}>
+            <button type="button" data-testid="expense-delete" onClick={() => askDelete(i.id)}>
               Eliminar
             </button>
             {confirmingId === i.id && (
