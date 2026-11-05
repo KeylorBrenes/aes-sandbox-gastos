@@ -53,6 +53,18 @@ public class ExpenseEndpointsTests(ApiFactory factory) : IClassFixture<ApiFactor
         Assert.Equal(0.3m, list.GetProperty("total").GetDecimal());
     }
 
+    [Theory]
+    [InlineData("   ", null)]
+    [InlineData("", null)]
+    [InlineData("  hola  ", "  hola  ")]
+    public async Task Post_Note_WhitespaceBecomesNull_TextIsKeptAsIs(string note, string? expected)
+    {
+        var res = await _client.PostAsJsonAsync("/api/expenses", new { amount = 1, date = "2010-06-01", categoryId = "otros", note });
+
+        var saved = (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("note");
+        Assert.Equal(expected, saved.ValueKind == JsonValueKind.Null ? null : saved.GetString());
+    }
+
     [Fact]
     public async Task Post_Invalid_Returns400ProblemJson_AndCreatesNothing()
     {

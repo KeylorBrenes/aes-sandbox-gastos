@@ -53,6 +53,21 @@ public class ExpenseValidationTests
         Assert.Equal(["note"], Run(note: new string('x', 201)).Keys);
     }
 
+    [Fact]
+    public void NoteOfOnlySpaces_IsValidUpTo200_AndInvalidAt201()
+    {
+        Assert.Empty(Run(note: new string(' ', 200)));
+        Assert.Equal(["note"], Run(note: new string(' ', 201)).Keys);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData(" a ", " a ")]
+    public void NormalizeNote_OnlyEmptyOrWhitespaceBecomesNull(string? note, string? expected) =>
+        Assert.Equal(expected, ExpenseValidation.NormalizeNote(note));
+
     [Theory]
     [InlineData("2026-11", true)]
     [InlineData("2026-13", false)]
