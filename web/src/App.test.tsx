@@ -95,3 +95,14 @@ test('si las categorías fallan por red se muestra load-error y el formulario', 
   expect(screen.getByTestId('load-retry')).toBeTruthy()
   expect(screen.getByTestId('expense-form')).toBeTruthy()
 })
+
+test('expense-date es un input type="date" sin validación nativa', async () => {
+  mockApi(() => new Response(null, { status: 500 }))
+  render(<App />)
+  const date = (await screen.findByTestId('expense-date')) as HTMLInputElement
+  expect(date.type).toBe('date')
+  expect(date.value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(date.required).toBe(false)
+  expect(date.min).toBe('')
+  expect(date.max).toBe('')
+})
