@@ -30,7 +30,7 @@ public static class ExpenseEndpoints
                 Amount = request.Amount!.Value,
                 Date = date,
                 CategoryId = request.CategoryId!,
-                Note = string.IsNullOrEmpty(request.Note) ? null : request.Note,
+                Note = ExpenseValidation.NormalizeNote(request.Note),
                 CreatedAt = DateTime.UtcNow,
             };
             db.Expenses.Add(expense);
