@@ -104,6 +104,16 @@ Registro de fallos observados en agentes y de los controles añadidos para evita
 - **Aprobado por / fecha:**
 - **Verificado en:**
 
+## FL-010 — 2026-11-04
+- **Agente / harness / modelo:** verifier / Claude Code / Sonnet (V2 de CH-001)
+- **Tarea / historia:** CH-001 (verificación a posteriori sobre `main` 7c39684)
+- **Síntoma:** el hallazgo 1 afirma que el blob de `nuget.config` en `main` usa CRLF; el blob es LF (`git cat-file`, `ls-files --eol i/lf`). El CRLF solo está en la copia de trabajo por `text=auto` en Windows.
+- **Detectado por:** orquestador (`git cat-file | od -c`).
+- **Causa probable:** no consignada en la nota de origen.
+- **Control propuesto:** el verificador debe comprobar fines de línea sobre el blob (`git cat-file`), no sobre la copia de trabajo.
+- **Aprobado por / fecha:**
+- **Verificado en:**
+
 <!-- Plantilla de entrada:
 ## FL-NNN — YYYY-MM-DD
 - **Agente / harness / modelo:**
