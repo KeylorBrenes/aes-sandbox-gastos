@@ -106,3 +106,84 @@ test('expense-date es un input type="date" sin validación nativa', async () => 
   expect(date.min).toBe('')
   expect(date.max).toBe('')
 })
+
+type Item = { id: number; amount: number; date: string; categoryId: string; note: string | null }
+
+function mockCrud(putStatus = 200) {
+  let items: Item[] = [{ id: 7, amount: 1250.5, date: '2026-11-02', categoryId: 'otros', note: 'Super' }]
+  const calls: { method: string; url: string; body?: unknown }[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (url === '/api/categories') return Response.json(categories)
+      if (method === 'GET') {
+        return Response.json({ month: '2026-11', items, total: items.reduce((s, i) => s + i.amount, 0) })
+      }
+      const body = init?.body ? JSON.parse(init.body as string) : undefined
+      calls.push({ method, url, body })
+      if (method === 'PUT') {
+        if (putStatus === 400) return Response.json({ errors: { amount: ['Monto inválido.'] } }, { status: 400 })
+        items = items.map((i) => (url === `/api/expenses/${i.id}` ? { ...i, ...body } : i))
+        return Response.json(items[0])
+      }
+      if (method === 'DELETE') {
+        items = items.filter((i) => url !== `/api/expenses/${i.id}`)
+        return new Response(null, { status: 204 })
+      }
+      return Response.json({}, { status: 201 })
+    }),
+  )
+  return calls
+}
+
+const input = (id: string) => screen.getByTestId(id) as HTMLInputElement
+
+test('Editar llena el formulario, cambia a modo edición y Cancelar lo restablece', async () => {
+  mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+  expect(input('expense-amount').value).toBe('1250.5')
+  expect(input('expense-date').value).toBe('2026-11-02')
+  expect(input('expense-category').value).toBe('otros')
+  expect(input('expense-note').value).toBe('Super')
+  expect(screen.getByTestId('expense-submit').textContent).toBe('Guardar cambios')
+
+  fireEvent.click(screen.getByTestId('edit-cancel'))
+
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('create')
+  expect(input('expense-amount').value).toBe('')
+  expect(input('expense-note').value).toBe('')
+  expect(input('expense-category').value).toBe('alimentacion')
+  expect(screen.getByTestId('expense-submit').textContent).toBe('Guardar')
+  expect(screen.queryByTestId('edit-cancel')).toBeNull()
+})
+
+test('guardar la edición hace PUT, actualiza la lista y vuelve a modo alta', async () => {
+  const calls = mockCrud()
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+  fireEvent.change(input('expense-amount'), { target: { value: '99.9' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  await waitFor(() => expect(screen.getByTestId('expense-item').getAttribute('data-amount')).toBe('99.9'))
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({ method: 'PUT', url: '/api/expenses/7', body: { amount: 99.9, categoryId: 'otros' } })
+  expect(screen.getByTestId('month-total').getAttribute('data-amount')).toBe('99.9')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('create')
+  expect(input('expense-amount').value).toBe('')
+})
+
+test('un 400 al editar muestra el error y mantiene el modo edición', async () => {
+  mockCrud(400)
+  render(<App />)
+  fireEvent.click(await screen.findByTestId('expense-edit'))
+  fireEvent.change(input('expense-amount'), { target: { value: '-5' } })
+  fireEvent.click(screen.getByTestId('expense-submit'))
+
+  expect((await screen.findByTestId('field-error-amount')).textContent).toBe('Monto inválido.')
+  expect(screen.getByTestId('expense-form').getAttribute('data-mode')).toBe('edit')
+  expect(screen.getByTestId('expense-item').getAttribute('data-amount')).toBe('1250.5')
+})
